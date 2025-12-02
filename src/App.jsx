@@ -8,7 +8,7 @@ import HomePage from './components/HomePage';
 
 export default function App() {
   const { isAuthenticated, loading, initAuth } = useAuthStore();
-  const { workspaces, currentWorkspaceId, loading: workspaceLoading, initWorkspaces, cleanup: cleanupWorkspaces } = useWorkspaceStore();
+  const { loading: workspaceLoading, initWorkspaces, cleanup: cleanupWorkspaces } = useWorkspaceStore();
   const { theme, initPreferences, cleanup: cleanupPreferences } = usePreferencesStore();
   const [showHomePage, setShowHomePage] = useState(true);
 
@@ -29,16 +29,8 @@ export default function App() {
     }
   }, [isAuthenticated, initWorkspaces, initPreferences, cleanupWorkspaces, cleanupPreferences]);
 
-  // Auto-navigate to dashboard if there's a current workspace selected
-  useEffect(() => {
-    if (currentWorkspaceId && Object.keys(workspaces).length > 0) {
-      // If user has workspaces and one is selected, show dashboard
-      setShowHomePage(false);
-    } else if (Object.keys(workspaces).length === 0 && !workspaceLoading) {
-      // If no workspaces exist, show homepage to create one
-      setShowHomePage(true);
-    }
-  }, [currentWorkspaceId, workspaces, workspaceLoading]);
+  // Always start on homepage when authenticated - user manually selects workspace
+  // No auto-navigation to dashboard
 
   if (loading) {
     return (
