@@ -27,21 +27,16 @@ import GanttChart from './GanttChart';
 import ExportMenu from './ExportMenu';
 import SettingsModal from './SettingsModal';
 import WorkspaceSelector from './WorkspaceSelector';
-import EmptyState from './EmptyState';
 import ConfirmationModal from './ConfirmationModal';
 
-export default function GanttDashboard() {
+export default function GanttDashboard({ onGoHome }) {
   const { user, logout } = useAuthStore();
   const { tasks, initTasks, cleanup, addTask, updateTask, deleteTask, addSubtask, findTaskById } = useGanttStore();
   const { 
-    workspaces, 
     currentWorkspaceId, 
     getCurrentWorkspace,
-    loading: workspaceLoading, 
-    initWorkspaces, 
-    cleanup: cleanupWorkspaces 
   } = useWorkspaceStore();
-  const { theme, exportTheme, useRoundedSubtasks, showDependencyLinesOnExport, barHeight, taskLabelPosition, initPreferences, cleanup: cleanupPreferences } = usePreferencesStore();
+  const { theme, exportTheme, useRoundedSubtasks, showDependencyLinesOnExport, barHeight, taskLabelPosition } = usePreferencesStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -57,26 +52,17 @@ export default function GanttDashboard() {
   const ganttChartRef = useRef(null);
 
   const currentWorkspace = getCurrentWorkspace();
-  const hasWorkspaces = Object.keys(workspaces).length > 0;
-
-  // Initialize workspaces on mount
-  useEffect(() => {
-    initWorkspaces();
-    initPreferences();
-    
-    return () => {
-      cleanupWorkspaces();
-      cleanupPreferences();
-      cleanup();
-    };
-  }, [initWorkspaces, initPreferences, cleanupWorkspaces, cleanupPreferences, cleanup]);
 
   // Initialize tasks when workspace changes
   useEffect(() => {
     if (currentWorkspaceId) {
       initTasks(currentWorkspaceId);
     }
-  }, [currentWorkspaceId, initTasks]);
+    
+    return () => {
+      cleanup();
+    };
+  }, [currentWorkspaceId, initTasks, cleanup]);
 
   const handleAddTask = () => {
     setEditingTask(null);
@@ -158,78 +144,6 @@ export default function GanttDashboard() {
     ? filterTasks(tasks, searchTerm)
     : tasks;
 
-  // Show loading state while workspaces are being fetched
-  if (workspaceLoading) {
-    return (
-      <div className={`min-h-screen flex items-center justify-center ${
-        theme === 'dark' ? 'bg-[#0f1419]' : 'bg-slate-100'
-      }`}>
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-cyan-500 to-violet-500 rounded-xl mb-4">
-            <svg className="w-8 h-8 text-white animate-spin" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          </div>
-          <p className={`text-lg font-medium ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show empty state if no workspaces exist
-  if (!hasWorkspaces) {
-    return (
-      <div className={`min-h-screen flex flex-col ${
-        theme === 'dark' ? 'bg-[#0f1419]' : 'bg-slate-100'
-      }`}>
-        {/* Minimal header for empty state */}
-        <header className="relative">
-          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-60" />
-          <div className={`backdrop-blur-2xl border-b ${
-            theme === 'dark' 
-              ? 'bg-slate-900/70 border-white/5' 
-              : 'bg-white/70 border-slate-200'
-          }`}>
-            <div className="px-6 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="relative w-10 h-10 bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <h1 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>Gantt Pro</h1>
-              </div>
-              <button
-                onClick={() => setShowLogoutConfirm(true)}
-                className={`p-2.5 rounded-xl transition-all ${
-                  theme === 'dark'
-                    ? 'text-slate-500 hover:text-white hover:bg-white/10'
-                    : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100'
-                }`}
-                title="Logout"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </header>
-        <EmptyState />
-
-        {/* Logout Confirmation */}
-        <ConfirmationModal
-          isOpen={showLogoutConfirm}
-          onClose={() => setShowLogoutConfirm(false)}
-          onConfirm={logout}
-          title="Sign Out?"
-          message="Are you sure you want to sign out? You'll need to sign in again to access your workspaces."
-          confirmText="Sign Out"
-          type="warning"
-        />
-      </div>
-    );
-  }
-
   return (
     <div className={`min-h-screen ${
       isChartExpanded ? 'overflow-y-auto overflow-x-hidden' : ''
@@ -276,16 +190,20 @@ export default function GanttDashboard() {
                 <Menu className="w-5 h-5" />
               </button>
 
-              {/* Logo & Title */}
+              {/* Logo & Title - Logo is clickable to go home */}
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 md:flex-none">
-                <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity" />
-                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg">
+                <button
+                  onClick={onGoHome}
+                  className="relative group cursor-pointer"
+                  title="All Workspaces"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-xl blur-lg opacity-40 group-hover:opacity-70 transition-opacity" />
+                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                     <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                   </div>
-                </div>
+                </button>
                 <div className="min-w-0 hidden sm:block">
                   <h1 className={`text-lg font-bold bg-clip-text text-transparent ${
                     theme === 'dark'
@@ -340,10 +258,10 @@ export default function GanttDashboard() {
                   <Search className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
 
-                {/* Settings Button */}
+                {/* Settings Button - Desktop only (mobile has it in bottom nav) */}
                 <button
                   onClick={() => setShowSettingsModal(true)}
-                  className={`p-2 sm:p-2.5 rounded-xl transition-all hidden sm:flex ${
+                  className={`p-2 sm:p-2.5 rounded-xl transition-all hidden md:flex ${
                     theme === 'dark'
                       ? 'text-slate-400 hover:text-white hover:bg-white/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
@@ -510,36 +428,20 @@ export default function GanttDashboard() {
 
             {/* Sidebar Footer Actions */}
             <div className={`p-4 border-t ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => {
-                    setShowSettingsModal(true);
-                    setShowMobileSidebar(false);
-                  }}
-                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium ${
-                    theme === 'dark'
-                      ? 'bg-white/5 text-slate-300 hover:bg-white/10'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
-                <button
-                  onClick={() => {
-                    setShowMobileSidebar(false);
-                    setShowLogoutConfirm(true);
-                  }}
-                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium ${
-                    theme === 'dark'
-                      ? 'bg-white/5 text-slate-300 hover:bg-white/10'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  <LogOut className="w-4 h-4" />
-                  Logout
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setShowMobileSidebar(false);
+                  setShowLogoutConfirm(true);
+                }}
+                className={`w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium ${
+                  theme === 'dark'
+                    ? 'bg-white/5 text-slate-300 hover:bg-white/10'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
             </div>
           </div>
         </div>
@@ -704,17 +606,17 @@ export default function GanttDashboard() {
               }`}>Add</span>
             </button>
 
-            {/* Workspaces */}
+            {/* Settings */}
             <button
-              onClick={() => setShowMobileSidebar(true)}
+              onClick={() => setShowSettingsModal(true)}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
                 theme === 'dark'
                   ? 'text-slate-400 hover:text-white hover:bg-white/10'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
               }`}
             >
-              <FolderOpen className="w-5 h-5" />
-              <span className="text-[10px] font-medium">Spaces</span>
+              <Settings className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Settings</span>
             </button>
 
             {/* Export / More */}

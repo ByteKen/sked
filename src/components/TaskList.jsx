@@ -114,18 +114,18 @@ export default function TaskList({ tasks, onEdit, onDelete, onAddSubtask, select
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+          {/* Action buttons - always visible for better mobile UX */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             {!isSubtask && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onAddSubtask(task.id);
                 }}
-                className={`p-1 rounded transition ${
+                className={`p-1.5 rounded transition ${
                   theme === 'dark'
-                    ? 'hover:bg-cyan-600/50 text-cyan-400'
-                    : 'hover:bg-cyan-100 text-cyan-600'
+                    ? 'hover:bg-cyan-600/50 text-cyan-400/70 hover:text-cyan-400'
+                    : 'hover:bg-cyan-100 text-cyan-500/70 hover:text-cyan-600'
                 }`}
                 title="Add subtask"
               >
@@ -137,10 +137,10 @@ export default function TaskList({ tasks, onEdit, onDelete, onAddSubtask, select
                 e.stopPropagation();
                 onEdit(task);
               }}
-              className={`p-1 rounded transition ${
+              className={`p-1.5 rounded transition ${
                 theme === 'dark'
-                  ? 'hover:bg-white/10 text-slate-400'
-                  : 'hover:bg-slate-200 text-slate-500'
+                  ? 'hover:bg-white/10 text-slate-500 hover:text-slate-300'
+                  : 'hover:bg-slate-200 text-slate-400 hover:text-slate-600'
               }`}
               title="Edit task"
             >
@@ -151,10 +151,10 @@ export default function TaskList({ tasks, onEdit, onDelete, onAddSubtask, select
                 e.stopPropagation();
                 onDelete(task.id);
               }}
-              className={`p-1 rounded transition ${
+              className={`p-1.5 rounded transition ${
                 theme === 'dark'
-                  ? 'hover:bg-red-600/50 text-red-400'
-                  : 'hover:bg-red-100 text-red-500'
+                  ? 'hover:bg-red-600/50 text-red-400/70 hover:text-red-400'
+                  : 'hover:bg-red-100 text-red-400/70 hover:text-red-500'
               }`}
               title="Delete task"
             >

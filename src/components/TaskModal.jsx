@@ -531,29 +531,10 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
             </div>
           )}
 
-          {/* Milestone checkbox */}
-          <label className={`flex items-center gap-3 cursor-pointer p-3 rounded-xl transition-all ${
-            theme === 'dark' ? 'bg-white/5 hover:bg-white/10' : 'bg-slate-50 hover:bg-slate-100'
-          }`}>
-            <input
-              type="checkbox"
-              name="isMilestone"
-              checked={formData.isMilestone}
-              onChange={handleChange}
-              className={`w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 ${
-                theme === 'dark' ? 'border-slate-600 bg-slate-700' : 'border-slate-300 bg-white'
-              }`}
-            />
-            <div>
-              <span className={`text-sm font-medium ${theme === 'dark' ? 'text-slate-200' : 'text-slate-700'}`}>Mark as milestone</span>
-              <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>Highlight this as a key project checkpoint</p>
-            </div>
-          </label>
-
           {/* Dependencies - simplified */}
           {allTasks.length > (task ? 1 : 0) && (
             <div className="space-y-2">
-              <label className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Dependencies</label>
+              <label className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Dependent on</label>
               <div className={`space-y-1 max-h-32 overflow-y-auto p-2 rounded-xl ${
                 theme === 'dark' ? 'bg-white/5' : 'bg-slate-50'
               }`}>

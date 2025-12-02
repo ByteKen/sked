@@ -79,7 +79,7 @@ export default function LoginScreen() {
 
               {/* Cancelled message - friendly, not alarming */}
               {cancelled && !error && (
-                <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
                   <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm text-slate-600 font-medium">Sign-in cancelled</p>
