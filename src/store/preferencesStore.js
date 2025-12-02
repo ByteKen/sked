@@ -37,15 +37,34 @@ export const usePreferencesStore = create(
           const data = docSnap.data();
           const prefs = data.preferences || {};
           
-          set({
+          // Get current state
+          const currentState = get();
+          
+          const newPrefs = {
             useRoundedSubtasks: prefs.useRoundedSubtasks ?? defaultPreferences.useRoundedSubtasks,
             theme: prefs.theme ?? defaultPreferences.theme,
             exportTheme: prefs.exportTheme ?? defaultPreferences.exportTheme,
             taskLabelPosition: prefs.taskLabelPosition ?? defaultPreferences.taskLabelPosition,
             showDependencyLinesOnExport: prefs.showDependencyLinesOnExport ?? defaultPreferences.showDependencyLinesOnExport,
             barHeight: prefs.barHeight ?? defaultPreferences.barHeight,
-            loading: false,
-          });
+          };
+          
+          // Only update if preferences actually changed
+          const prefsChanged = 
+            currentState.useRoundedSubtasks !== newPrefs.useRoundedSubtasks ||
+            currentState.theme !== newPrefs.theme ||
+            currentState.exportTheme !== newPrefs.exportTheme ||
+            currentState.taskLabelPosition !== newPrefs.taskLabelPosition ||
+            currentState.showDependencyLinesOnExport !== newPrefs.showDependencyLinesOnExport ||
+            currentState.barHeight !== newPrefs.barHeight ||
+            currentState.loading !== false;
+          
+          if (prefsChanged) {
+            set({
+              ...newPrefs,
+              loading: false,
+            });
+          }
         } else {
           // New user - use defaults
           set({ ...defaultPreferences, loading: false });

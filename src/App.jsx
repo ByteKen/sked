@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
 import { useWorkspaceStore } from './store/workspaceStore';
@@ -47,20 +47,34 @@ function ProtectedRoute({ children }) {
 function WorkspaceDashboardRoute() {
   const { workspaceId } = useParams();
   const navigate = useNavigate();
-  const { switchWorkspace, workspaces, loading } = useWorkspaceStore();
+  const { switchWorkspace, workspaces, loading, currentWorkspaceId } = useWorkspaceStore();
   const { theme } = usePreferencesStore();
+  const switchingRef = useRef(false);
   
   useEffect(() => {
-    if (workspaceId && workspaces[workspaceId]) {
-      switchWorkspace(workspaceId);
-    } else if (!loading && workspaceId && Object.keys(workspaces).length > 0 && !workspaces[workspaceId]) {
+    // Wait for workspaces to load first
+    if (loading) {
+      return;
+    }
+    
+    // Check if workspace exists
+    if (!workspaces[workspaceId]) {
       // Workspace doesn't exist, redirect to home
       navigate('/', { replace: true });
+      return;
     }
-  }, [workspaceId, workspaces, loading, switchWorkspace, navigate]);
+    
+    // Switch to the workspace if not already current
+    if (currentWorkspaceId !== workspaceId && !switchingRef.current) {
+      switchingRef.current = true;
+      switchWorkspace(workspaceId).finally(() => {
+        switchingRef.current = false;
+      });
+    }
+  }, [workspaceId, workspaces, loading, currentWorkspaceId, switchWorkspace, navigate]);
   
-  // Show loading if workspace not yet loaded
-  if (loading || !workspaces[workspaceId]) {
+  // Show loading while workspaces load or workspace not ready
+  if (loading || currentWorkspaceId !== workspaceId) {
     return <LoadingScreen theme={theme} />;
   }
   

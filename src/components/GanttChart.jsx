@@ -1,4 +1,4 @@
-import { useMemo, useState, forwardRef, useImperativeHandle, useCallback, useEffect } from 'react';
+import { useMemo, useState, forwardRef, useImperativeHandle, useCallback, useEffect, memo, useRef } from 'react';
 import { ChevronDown, ChevronRight, ZoomIn, ZoomOut, Maximize2, CalendarDays, Minimize2, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { usePreferencesStore } from '../store/preferencesStore';
 
@@ -64,14 +64,15 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
   }, [tasks]);
 
   // Calculate date range - aligned to granularity boundaries
-  const { startDate, days } = useMemo(() => {
+  // Returns timestamps to avoid new Date object references
+  const { startTimestamp, days } = useMemo(() => {
     const flatTasks = flattenTasks(tasks);
     if (flatTasks.length === 0) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       return {
-        startDate: today,
-        endDate: new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000),
+        startTimestamp: today.getTime(),
+        endTimestamp: today.getTime() + 30 * 24 * 60 * 60 * 1000,
         days: 30,
       };
     }
@@ -97,8 +98,11 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     const diffTime = Math.abs(alignedEnd - alignedStart);
     const dayCount = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    return { startDate: alignedStart, endDate: alignedEnd, days: dayCount };
+    return { startTimestamp: alignedStart.getTime(), endTimestamp: alignedEnd.getTime(), days: dayCount };
   }, [tasks]);
+  
+  // Create stable Date object reference from timestamp
+  const startDate = useMemo(() => new Date(startTimestamp), [startTimestamp]);
 
   // Adjust cell width based on granularity and zoom
   const baseCellWidth = 40;
@@ -273,8 +277,9 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     toggleExpandedView
   }));
 
-  // Get task position
-  const getTaskPosition = (task) => {
+  // Get task position - memoized to prevent recreation on each render
+  // Uses startTimestamp (primitive) instead of startDate (object) for stable dependency
+  const getTaskPosition = useCallback((task) => {
     const start = new Date(task.start);
     const end = new Date(task.end);
     
@@ -284,25 +289,25 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     
     // Calculate days from timeline start
     const msPerDay = 1000 * 60 * 60 * 24;
-    const daysFromStart = Math.round((start - startDate) / msPerDay);
+    const daysFromStart = Math.round((start.getTime() - startTimestamp) / msPerDay);
     const durationDays = Math.max(1, Math.round((end - start) / msPerDay) + 1);
 
     const left = daysFromStart * pixelsPerDay;
     const width = Math.max(pixelsPerDay * 2, durationDays * pixelsPerDay);
 
     return { left, width };
-  };
+  }, [startTimestamp, pixelsPerDay]);
 
   // Check if any child (recursive) is currently working
-  const hasWorkingChild = (task) => {
+  const hasWorkingChild = useCallback((task) => {
     if (!task.children || task.children.length === 0) return false;
     return task.children.some(child => 
       child.isWorking || hasWorkingChild(child)
     );
-  };
+  }, []);
 
   // Get bar gradient based on progress and working status
-  const getBarStyle = (task) => {
+  const getBarStyle = useCallback((task) => {
     // Green for completed tasks (100% progress or isDone)
     if (task.progress === 100 || task.isDone) {
       return { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' };
@@ -323,7 +328,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     
     // Gray for not started / not working
     return { background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)' };
-  };
+  }, [hasWorkingChild]);
 
   const toggleExpand = (taskId) => {
     setExpandedTasks((prev) => ({
@@ -347,7 +352,8 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     }
   };
 
-  const flatTasksList = flattenTasks(tasks);
+  // Memoize flattened task list to prevent recalculation on every render
+  const flatTasksList = useMemo(() => flattenTasks(tasks), [tasks]);
 
   // Render task names (sidebar)
   const TaskNameComponent = ({ task, level = 0 }) => {
@@ -437,7 +443,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     );
   };
 
-  // Render task bars
+  // Render task bars - using CSS hover for performance (no state re-renders)
   const TaskBarComponent = ({ task, rowIndex }) => {
     const { left, width } = getTaskPosition(task);
     const barStyle = getBarStyle(task);
@@ -476,24 +482,23 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           >
             {/* Rounded Deadline Bar (same style as regular tasks) */}
             <div
-              className="absolute rounded-full cursor-pointer shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02] group"
+              className="absolute rounded-full cursor-pointer shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 group"
               style={{
                 left: `${left}px`,
                 width: `${Math.max(width, 30)}px`,
                 height: `${barHeightPx}px`,
                 background: diamondGradient,
               }}
-              onClick={() => onTaskClick?.(task.id)}
-              onDoubleClick={() => onTaskEdit?.(task)}
+              onClick={() => onTaskEdit?.(task)}
             >
               {/* Completed indicator */}
               {isCompleted && (
-                <div className="absolute inset-y-0 left-0 rounded-l-full bg-white/25 w-full rounded-full" />
+                <div className="absolute inset-y-0 left-0 rounded-l-full bg-white/25 w-full rounded-full pointer-events-none" />
               )}
 
               {/* Label - Inside */}
               {taskLabelPosition === 'inside' && (
-                <div className="absolute inset-0 flex items-center justify-center px-3">
+                <div className="absolute inset-0 flex items-center justify-center px-3 pointer-events-none">
                   <span className="text-xs font-semibold text-white drop-shadow-sm truncate">
                     {width > 80 ? task.name : ''} 
                     {isCompleted && width > 50 ? ' ✓' : ''}
@@ -502,13 +507,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
               )}
 
               {/* Hover Effect */}
-              <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/10 transition-colors" />
+              <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/10 transition-colors pointer-events-none" />
             </div>
             
             {/* Label - Outside */}
             {taskLabelPosition === 'outside' && (
               <div 
-                className={`absolute text-xs font-medium truncate ${
+                className={`absolute text-xs font-medium truncate pointer-events-none ${
                   theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
                 }`}
                 style={{ 
@@ -539,14 +544,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         >
           {/* Deadline Diamond Marker */}
           <div
-            className="absolute cursor-pointer hover:scale-110 transition-all duration-200 group"
-            style={{ left: `${left}px` }}
-            onClick={() => onTaskClick?.(task.id)}
-            onDoubleClick={() => onTaskEdit?.(task)}
+            className="absolute cursor-pointer hover:scale-110 transition-transform duration-200 group"
+            style={{ left: `${left}px`, transformOrigin: 'center center' }}
+            onClick={() => onTaskEdit?.(task)}
           >
             {/* Diamond shape */}
             <div 
-              className={`rotate-45 rounded-sm shadow-lg ${shadowColor}`}
+              className={`rotate-45 rounded-sm shadow-lg pointer-events-none ${shadowColor}`}
               style={{ 
                 background: diamondGradient,
                 width: `${diamondSize}px`,
@@ -554,7 +558,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
               }}
             />
             {/* Center dot or checkmark */}
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               {isCompleted ? (
                 <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -580,7 +584,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           {/* Label - Outside (for diamond markers) */}
           {taskLabelPosition === 'outside' && (
             <div 
-              className={`absolute text-xs font-medium truncate ${
+              className={`absolute text-xs font-medium truncate pointer-events-none ${
                 theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
               }`}
               style={{ 
@@ -610,27 +614,26 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
       >
         {/* Task Bar */}
         <div
-          className="absolute rounded-full cursor-pointer shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02] group"
+          className="absolute rounded-full cursor-pointer shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all duration-200 group"
           style={{
             left: `${left}px`,
             width: `${Math.max(width, 30)}px`,
             height: `${barHeightPx}px`,
             ...barStyle,
           }}
-          onClick={() => onTaskClick?.(task.id)}
-          onDoubleClick={() => onTaskEdit?.(task)}
+          onClick={() => onTaskEdit?.(task)}
         >
           {/* Progress Fill */}
           {task.progress > 0 && task.progress < 100 && (
             <div
-              className="absolute inset-y-0 left-0 rounded-l-full bg-white/25"
+              className="absolute inset-y-0 left-0 rounded-l-full bg-white/25 pointer-events-none"
               style={{ width: `${task.progress}%` }}
             />
           )}
 
           {/* Label - Inside */}
           {taskLabelPosition === 'inside' && (
-            <div className="absolute inset-0 flex items-center justify-center px-3">
+            <div className="absolute inset-0 flex items-center justify-center px-3 pointer-events-none">
               <span className="text-xs font-semibold text-white drop-shadow-sm truncate">
                 {width > 80 ? task.name : ''} 
                 {width > 120 && task.progress > 0 ? ` ${task.progress}%` : ''}
@@ -639,13 +642,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           )}
 
           {/* Hover Effect */}
-          <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/10 transition-colors" />
+          <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/10 transition-colors pointer-events-none" />
         </div>
         
         {/* Label - Outside */}
         {taskLabelPosition === 'outside' && (
           <div 
-            className={`absolute text-xs font-medium truncate ${
+            className={`absolute text-xs font-medium truncate pointer-events-none ${
               theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
             }`}
             style={{ 
@@ -661,6 +664,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
       </div>
     );
   };
+
+  // Memoize task bars to prevent re-renders on hover
+  const taskBarsRendered = useMemo(() => {
+    return flatTasksList.map((task, index) => (
+      <TaskBarComponent key={task.id} task={task} rowIndex={index} />
+    ));
+  }, [flatTasksList, pixelsPerDay, startTimestamp, rowHeight, barHeightPx, useRoundedSubtasks, taskLabelPosition, theme, onTaskEdit, getTaskPosition, getBarStyle]);
 
   // Generate date headers
   const DateHeaders = () => {
@@ -1298,10 +1308,8 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                 <DependencyLines />
               </svg>
 
-              {/* Task Bars */}
-              {flatTasksList.map((task, index) => (
-                <TaskBarComponent key={task.id} task={task} rowIndex={index} />
-              ))}
+              {/* Task Bars - memoized for performance */}
+              {taskBarsRendered}
             </div>
           </div>
         </div>
@@ -1311,7 +1319,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
 });
 
 GanttChart.displayName = 'GanttChart';
-export default GanttChart;
+export default memo(GanttChart);
 
 // Helper functions
 function flattenTasks(tasks, level = 0) {

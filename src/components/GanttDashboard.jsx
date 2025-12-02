@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Plus,
   LogOut,
@@ -69,10 +69,10 @@ export default function GanttDashboard({ onGoHome }) {
     setShowTaskModal(true);
   };
 
-  const handleEditTask = (task) => {
+  const handleEditTask = useCallback((task) => {
     setEditingTask(task);
     setShowTaskModal(true);
-  };
+  }, []);
 
   const handleAddSubtask = (parentTaskId) => {
     setEditingTask(null);
@@ -140,9 +140,10 @@ export default function GanttDashboard({ onGoHome }) {
     setShowExportMenu(false);
   };
 
-  const visibleTasks = searchTerm
-    ? filterTasks(tasks, searchTerm)
-    : tasks;
+  const visibleTasks = useMemo(() => 
+    searchTerm ? filterTasks(tasks, searchTerm) : tasks,
+    [tasks, searchTerm]
+  );
 
   return (
     <div className={`min-h-screen ${

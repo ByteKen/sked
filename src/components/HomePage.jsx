@@ -25,7 +25,6 @@ export default function HomePage({ onOpenWorkspace }) {
     createWorkspace,
     updateWorkspace,
     deleteWorkspace,
-    switchWorkspace
   } = useWorkspaceStore();
   
   const { theme } = usePreferencesStore();
@@ -84,8 +83,8 @@ export default function HomePage({ onOpenWorkspace }) {
     }
   };
 
-  const handleOpenWorkspace = async (workspaceId) => {
-    await switchWorkspace(workspaceId);
+  const handleOpenWorkspace = (workspaceId) => {
+    // Just navigate - the route will handle switchWorkspace
     onOpenWorkspace(workspaceId);
   };
 

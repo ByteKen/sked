@@ -47,11 +47,24 @@ export const useGanttStore = create(
           const tasksKey = `tasks_${workspaceId}`;
           const nextIdKey = `nextId_${workspaceId}`;
           
-          set({ 
-            tasks: data[tasksKey] || [], 
-            nextId: data[nextIdKey] || 1,
-            loading: false 
-          });
+          const newTasks = data[tasksKey] || [];
+          const newNextId = data[nextIdKey] || 1;
+          
+          // Get current state
+          const currentState = get();
+          
+          // Only update if values actually changed to prevent re-renders
+          const tasksChanged = JSON.stringify(currentState.tasks) !== JSON.stringify(newTasks);
+          const nextIdChanged = currentState.nextId !== newNextId;
+          const loadingChanged = currentState.loading !== false;
+          
+          if (tasksChanged || nextIdChanged || loadingChanged) {
+            set({ 
+              tasks: tasksChanged ? newTasks : currentState.tasks, 
+              nextId: newNextId,
+              loading: false 
+            });
+          }
         } else {
           set({ tasks: [], nextId: 1, loading: false });
         }

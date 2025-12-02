@@ -45,25 +45,35 @@ export const useWorkspaceStore = create(
       const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          const workspaces = data.workspaces || {};
+          const newWorkspaces = data.workspaces || {};
           const lastWorkspaceId = data.lastWorkspaceId;
           
+          // Get current state to compare
+          const currentState = get();
+          
           // Set current workspace to last used, or first available
-          let currentWorkspaceId = null;
-          if (lastWorkspaceId && workspaces[lastWorkspaceId]) {
-            currentWorkspaceId = lastWorkspaceId;
+          let newCurrentWorkspaceId = null;
+          if (lastWorkspaceId && newWorkspaces[lastWorkspaceId]) {
+            newCurrentWorkspaceId = lastWorkspaceId;
           } else {
-            const workspaceIds = Object.keys(workspaces);
+            const workspaceIds = Object.keys(newWorkspaces);
             if (workspaceIds.length > 0) {
-              currentWorkspaceId = workspaceIds[0];
+              newCurrentWorkspaceId = workspaceIds[0];
             }
           }
 
-          set({ 
-            workspaces, 
-            currentWorkspaceId,
-            loading: false 
-          });
+          // Only update if values actually changed to prevent unnecessary re-renders
+          const workspacesChanged = JSON.stringify(currentState.workspaces) !== JSON.stringify(newWorkspaces);
+          const currentIdChanged = currentState.currentWorkspaceId !== newCurrentWorkspaceId;
+          const loadingChanged = currentState.loading !== false;
+          
+          if (workspacesChanged || currentIdChanged || loadingChanged) {
+            set({ 
+              workspaces: workspacesChanged ? newWorkspaces : currentState.workspaces, 
+              currentWorkspaceId: newCurrentWorkspaceId,
+              loading: false 
+            });
+          }
         } else {
           // New user - no workspaces yet
           set({ workspaces: {}, currentWorkspaceId: null, loading: false });
@@ -125,17 +135,21 @@ export const useWorkspaceStore = create(
       const user = auth.currentUser;
       if (!user) return;
 
-      const { workspaces } = get();
+      const { workspaces, currentWorkspaceId } = get();
       if (!workspaces[workspaceId]) return;
+      
+      // Don't switch if already on this workspace
+      if (currentWorkspaceId === workspaceId) return;
 
       try {
+        // Update local state immediately for responsiveness
+        set({ currentWorkspaceId: workspaceId });
+        
         const userDocRef = doc(db, 'users', user.uid);
         await setDoc(userDocRef, {
           lastWorkspaceId: workspaceId,
           updatedAt: serverTimestamp(),
         }, { merge: true });
-
-        set({ currentWorkspaceId: workspaceId });
       } catch (err) {
         console.error('Failed to switch workspace:', err);
       }
