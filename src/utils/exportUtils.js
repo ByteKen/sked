@@ -372,6 +372,19 @@ export const exportToPDF = async (ganttRef, tasks, filename = 'gantt-chart.pdf',
           ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
+        
+        // Label - Outside (for diamond markers)
+        if (config.taskLabelPosition === 'outside') {
+          ctx.fillStyle = config.colors.text;
+          ctx.font = `500 ${config.fontSize.barLabel}px Inter, system-ui, sans-serif`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          
+          let label = task.name;
+          if (isComplete) label += ' ✓';
+          
+          ctx.fillText(label, cx + diamondSize / 2 + 8, cy);
+        }
         } // End of diamond else block
       } else {
         // --- REGULAR TASK BAR ---
