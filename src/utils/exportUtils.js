@@ -205,7 +205,7 @@ export const exportToPDF = async (ganttRef, tasks, filename = 'gantt-chart.pdf',
       ctx.lineTo(canvasWidth - config.padding, rowY + config.rowHeight);
       ctx.stroke();
 
-      // --- TASK NAME ---
+      // --- TASK NAME AND DATE RANGE ---
       const indent = task.level * 16;
       ctx.fillStyle = config.colors.text;
       ctx.font = `500 ${config.fontSize.taskName}px Inter, system-ui, sans-serif`;
@@ -220,7 +220,25 @@ export const exportToPDF = async (ganttRef, tasks, filename = 'gantt-chart.pdf',
         displayName = displayName.slice(0, -4) + '...';
         nameWidth = ctx.measureText(displayName).width;
       }
-      ctx.fillText(displayName, config.padding + 12 + indent, rowY + config.rowHeight / 2);
+      
+      // Format date range
+      const formatDateShort = (date) => {
+        return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      };
+      const taskStartDate = new Date(task.start);
+      const taskEndDate = new Date(task.end);
+      const isSameDay = taskStartDate.getTime() === taskEndDate.getTime();
+      const dateRange = isSameDay 
+        ? formatDateShort(task.start)
+        : `${formatDateShort(task.start)} - ${formatDateShort(task.end)}`;
+      
+      // Draw task name (slightly higher to make room for date)
+      ctx.fillText(displayName, config.padding + 12 + indent, rowY + config.rowHeight / 2 - 6);
+      
+      // Draw date range below the name
+      ctx.fillStyle = config.colors.textMuted;
+      ctx.font = `400 ${config.fontSize.date - 1}px Inter, system-ui, sans-serif`;
+      ctx.fillText(dateRange, config.padding + 12 + indent, rowY + config.rowHeight / 2 + 8);
 
       // --- TASK BAR ---
       const taskStart = new Date(task.start);
