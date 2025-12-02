@@ -77,7 +77,7 @@ export default function HomePage({ onOpenWorkspace }) {
         setNewWorkspaceName('');
         setShowNewWorkspaceModal(false);
         setInputError('');
-        onOpenWorkspace();
+        onOpenWorkspace(workspace.id);
       }
     } finally {
       setIsCreating(false);
@@ -86,7 +86,7 @@ export default function HomePage({ onOpenWorkspace }) {
 
   const handleOpenWorkspace = async (workspaceId) => {
     await switchWorkspace(workspaceId);
-    onOpenWorkspace();
+    onOpenWorkspace(workspaceId);
   };
 
   const handleStartEdit = (workspace, e) => {
