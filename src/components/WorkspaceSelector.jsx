@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   FolderOpen, 
   Plus, 
@@ -14,11 +16,10 @@ import { useWorkspaceStore } from '../store/workspaceStore';
 import { usePreferencesStore } from '../store/preferencesStore';
 
 export default function WorkspaceSelector() {
+  const navigate = useNavigate();
   const { 
+    workspaces,
     currentWorkspaceId, 
-    getCurrentWorkspace,
-    getWorkspaceList,
-    switchWorkspace, 
     createWorkspace,
     updateWorkspace,
     deleteWorkspace 
@@ -35,8 +36,11 @@ export default function WorkspaceSelector() {
   const [inputError, setInputError] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
 
-  const currentWorkspace = getCurrentWorkspace();
-  const workspaceList = getWorkspaceList();
+  // Derive these from actual state (reactive)
+  const currentWorkspace = currentWorkspaceId ? workspaces[currentWorkspaceId] : null;
+  const workspaceList = Object.values(workspaces).sort((a, b) => 
+    new Date(b.createdAt) - new Date(a.createdAt)
+  );
 
   const validateWorkspaceName = (name) => {
     if (!name.trim()) {
@@ -70,11 +74,15 @@ export default function WorkspaceSelector() {
     setIsOpen(false);
   };
 
-  const handleSwitchWorkspace = async (workspaceId) => {
+  const handleSwitchWorkspace = (workspaceId) => {
     if (workspaceId !== currentWorkspaceId) {
-      await switchWorkspace(workspaceId);
+      // Close dropdown and navigate to new workspace URL
+      // The App.jsx route will handle the actual switch
+      setIsOpen(false);
+      navigate(`/workspace/${workspaceId}`);
+    } else {
+      setIsOpen(false);
     }
-    setIsOpen(false);
   };
 
   const handleStartEdit = (workspace) => {
@@ -253,7 +261,11 @@ export default function WorkspaceSelector() {
                       /* Normal Mode */
                       <div className="flex items-center">
                         <button
-                          onClick={() => handleSwitchWorkspace(workspace.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleSwitchWorkspace(workspace.id);
+                          }}
                           className="flex-1 flex items-center gap-3 px-4 py-3 text-left"
                         >
                           <FolderOpen className={`w-4 h-4 ${
@@ -388,8 +400,8 @@ export default function WorkspaceSelector() {
         </>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
+      {/* Delete Confirmation Modal - Using Portal for proper positioning */}
+      {showDeleteConfirm && createPortal(
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100]">
           <div className={`mx-4 w-full max-w-sm rounded-2xl shadow-2xl border overflow-hidden ${
             theme === 'dark'
@@ -448,7 +460,8 @@ export default function WorkspaceSelector() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

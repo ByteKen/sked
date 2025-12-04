@@ -1,4 +1,4 @@
-import { useMemo, useState, forwardRef, useImperativeHandle, useCallback, useEffect, memo, useRef } from 'react';
+import { useMemo, useState, forwardRef, useImperativeHandle, useCallback, useEffect, memo } from 'react';
 import { ChevronDown, ChevronRight, ZoomIn, ZoomOut, Maximize2, CalendarDays, Minimize2, PanelLeftClose, PanelLeft } from 'lucide-react';
 import { usePreferencesStore } from '../store/preferencesStore';
 
@@ -29,7 +29,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
   }, [isMobile]);
   
   // Get preferences from store
-  const { useRoundedSubtasks, theme, barHeight, taskLabelPosition } = usePreferencesStore();
+  const { useRoundedSubtasks, theme, barHeight, taskLabelPosition, subtaskLabelPosition, showDependencyLines, showSubtaskConnectors } = usePreferencesStore();
   
   // Calculate bar dimensions based on preference
   const barHeightPx = {
@@ -38,8 +38,11 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     large: 36
   }[barHeight] || 28;
   
-  // Row height scales with bar height
-  const rowHeight = barHeightPx + 16; // padding above/below bar
+  // Determine if either label position is 'top' (affects row height)
+  const hasTopLabelPosition = taskLabelPosition === 'top' || subtaskLabelPosition === 'top';
+  
+  // Row height scales with bar height - extra space needed for 'top' label
+  const rowHeight = barHeightPx + (hasTopLabelPosition ? 24 : 16);
 
   // Toggle expanded view (removes vertical scroll for full capture)
   const toggleExpandedView = () => {
@@ -472,7 +475,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
       if (useRoundedSubtasks) {
         return (
           <div 
-            className="absolute flex items-center"
+            className={`absolute flex ${subtaskLabelPosition === 'top' ? 'items-end pb-1' : 'items-center'}`}
             style={{ 
               top: rowIndex * rowHeight, 
               height: rowHeight,
@@ -488,6 +491,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                 width: `${Math.max(width, 30)}px`,
                 height: `${barHeightPx}px`,
                 background: diamondGradient,
+                zIndex: 10,
               }}
               onClick={() => onTaskEdit?.(task)}
             >
@@ -496,22 +500,12 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                 <div className="absolute inset-y-0 left-0 rounded-l-full bg-white/25 w-full rounded-full pointer-events-none" />
               )}
 
-              {/* Label - Inside */}
-              {taskLabelPosition === 'inside' && (
-                <div className="absolute inset-0 flex items-center justify-center px-3 pointer-events-none">
-                  <span className="text-xs font-semibold text-white drop-shadow-sm truncate">
-                    {width > 80 ? task.name : ''} 
-                    {isCompleted && width > 50 ? ' ✓' : ''}
-                  </span>
-                </div>
-              )}
-
               {/* Hover Effect */}
               <div className="absolute inset-0 rounded-full bg-white/0 group-hover:bg-white/10 transition-colors pointer-events-none" />
             </div>
             
             {/* Label - Outside */}
-            {taskLabelPosition === 'outside' && (
+            {subtaskLabelPosition === 'outside' && (
               <div 
                 className={`absolute text-xs font-medium truncate pointer-events-none ${
                   theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
@@ -520,7 +514,25 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                   left: `${left + Math.max(width, 30) + 8}px`,
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  maxWidth: '150px'
+                  maxWidth: '150px',
+                  zIndex: 20
+                }}
+              >
+                {task.name} {isCompleted && '✓'}
+              </div>
+            )}
+
+            {/* Label - Top (above bar, aligned to start) */}
+            {subtaskLabelPosition === 'top' && (
+              <div 
+                className={`absolute text-xs font-medium truncate pointer-events-none ${
+                  theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+                }`}
+                style={{ 
+                  left: `${left}px`,
+                  top: '2px',
+                  maxWidth: '200px',
+                  zIndex: 20
                 }}
               >
                 {task.name} {isCompleted && '✓'}
@@ -534,7 +546,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
       const diamondSize = Math.max(16, barHeightPx - 4);
       return (
         <div 
-          className="absolute flex items-center"
+          className={`absolute flex ${subtaskLabelPosition === 'top' ? 'items-end pb-1' : 'items-center'}`}
           style={{ 
             top: rowIndex * rowHeight, 
             height: rowHeight,
@@ -545,7 +557,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           {/* Deadline Diamond Marker */}
           <div
             className="absolute cursor-pointer hover:scale-110 transition-transform duration-200 group"
-            style={{ left: `${left}px`, transformOrigin: 'center center' }}
+            style={{ left: `${left}px`, transformOrigin: 'center center', zIndex: 10 }}
             onClick={() => onTaskEdit?.(task)}
           >
             {/* Diamond shape */}
@@ -568,7 +580,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
               )}
             </div>
             {/* Tooltip on hover - shown when label is hidden */}
-            {taskLabelPosition === 'hidden' && (
+            {subtaskLabelPosition === 'hidden' && (
               <div className="absolute left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
                 <div className={`text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap border ${
                   theme === 'dark' 
@@ -582,7 +594,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           </div>
           
           {/* Label - Outside (for diamond markers) */}
-          {taskLabelPosition === 'outside' && (
+          {subtaskLabelPosition === 'outside' && (
             <div 
               className={`absolute text-xs font-medium truncate pointer-events-none ${
                 theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
@@ -591,7 +603,25 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                 left: `${left + diamondSize + 8}px`,
                 top: '50%',
                 transform: 'translateY(-50%)',
-                maxWidth: '150px'
+                maxWidth: '150px',
+                zIndex: 20
+              }}
+            >
+              {task.name} {isCompleted && '✓'}
+            </div>
+          )}
+
+          {/* Label - Top (above diamond, aligned to start) */}
+          {subtaskLabelPosition === 'top' && (
+            <div 
+              className={`absolute text-xs font-medium truncate pointer-events-none ${
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+              }`}
+              style={{ 
+                left: `${left}px`,
+                top: '2px',
+                maxWidth: '200px',
+                zIndex: 20
               }}
             >
               {task.name} {isCompleted && '✓'}
@@ -604,12 +634,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     // Regular task bar
     return (
       <div 
-        className="absolute flex items-center"
+        className={`absolute flex ${taskLabelPosition === 'top' ? 'items-end pb-1' : 'items-center'}`}
         style={{ 
           top: rowIndex * rowHeight, 
           height: rowHeight,
           left: 0,
-          right: 0
+          right: 0,
+          overflow: 'visible',
         }}
       >
         {/* Task Bar */}
@@ -619,6 +650,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             left: `${left}px`,
             width: `${Math.max(width, 30)}px`,
             height: `${barHeightPx}px`,
+            zIndex: 10,
             ...barStyle,
           }}
           onClick={() => onTaskEdit?.(task)}
@@ -655,11 +687,96 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
               left: `${left + Math.max(width, 30) + 8}px`,
               top: '50%',
               transform: 'translateY(-50%)',
-              maxWidth: '150px'
+              maxWidth: '150px',
+              zIndex: 20
             }}
           >
             {task.name} {task.progress > 0 ? `${task.progress}%` : ''}
           </div>
+        )}
+
+        {/* Label - Top (above bar, aligned to start) */}
+        {taskLabelPosition === 'top' && (
+          <div 
+            className={`absolute text-xs font-medium truncate pointer-events-none ${
+              theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
+            }`}
+            style={{ 
+              left: `${left}px`,
+              top: '2px',
+              maxWidth: '200px',
+              zIndex: 20
+            }}
+          >
+            {task.name} {task.progress > 0 ? `${task.progress}%` : ''}
+          </div>
+        )}
+
+        {/* Connectors to children (L-shaped lines from parent left/start to child start) */}
+        {showSubtaskConnectors && Array.isArray(task.children) && task.children.length > 0 && (
+          task.children.map((child) => {
+            const childIndex = flatTasksList.findIndex(t => t.id === child.id);
+            if (childIndex === -1) return null;
+            const { left: childLeft } = getTaskPosition(child);
+            const parentLeft = left; // Start from the LEFT side of parent bar
+
+            // Calculate Y positions - adjust for 'top' label position where bars are at bottom
+            // Parent uses taskLabelPosition, child uses subtaskLabelPosition
+            const parentBarCenterOffset = taskLabelPosition === 'top' 
+              ? rowHeight - barHeightPx / 2 - 4  // bar is at bottom with pb-1
+              : rowHeight / 2;  // bar is centered
+            const childBarCenterOffset = subtaskLabelPosition === 'top'
+              ? rowHeight - barHeightPx / 2 - 4
+              : rowHeight / 2;
+            const rowDiff = childIndex - rowIndex;
+            const verticalDistance = rowDiff * rowHeight + (childBarCenterOffset - parentBarCenterOffset);
+
+            // Connector color
+            const connectorColor = theme === 'dark' ? '#94a3b8' : '#64748b';
+
+            // Elbow position - slightly to the left of parent start
+            const elbowX = parentLeft - 10;
+            
+            return (
+              <div key={`conn-${task.id}-${child.id}`} className="pointer-events-none" style={{ position: 'absolute', left: 0, top: 0, zIndex: 1 }}>
+                {/* Horizontal from parent left going left to elbow */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${elbowX}px`,
+                    top: `${parentBarCenterOffset - 1}px`,
+                    width: `${parentLeft - elbowX}px`,
+                    height: '2px',
+                    background: connectorColor,
+                  }}
+                />
+
+                {/* Vertical line down to child row */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${elbowX}px`,
+                    top: `${parentBarCenterOffset}px`,
+                    width: '2px',
+                    height: `${verticalDistance}px`,
+                    background: connectorColor,
+                  }}
+                />
+
+                {/* Horizontal from elbow to child bar */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${elbowX}px`,
+                    top: `${parentBarCenterOffset + verticalDistance - 1}px`,
+                    width: `${Math.max(4, childLeft - elbowX)}px`,
+                    height: '2px',
+                    background: connectorColor,
+                  }}
+                />
+              </div>
+            );
+          })
         )}
       </div>
     );
@@ -670,7 +787,8 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     return flatTasksList.map((task, index) => (
       <TaskBarComponent key={task.id} task={task} rowIndex={index} />
     ));
-  }, [flatTasksList, pixelsPerDay, startTimestamp, rowHeight, barHeightPx, useRoundedSubtasks, taskLabelPosition, theme, onTaskEdit, getTaskPosition, getBarStyle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flatTasksList, TaskBarComponent]);
 
   // Generate date headers
   const DateHeaders = () => {
@@ -862,11 +980,29 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         const fromRowIndex = flatTasksList.findIndex(t => t.id === depTask.id);
         const toRowIndex = flatTasksList.findIndex(t => t.id === task.id);
 
+        // Determine if source and target tasks are subtasks or parent tasks
+        // Deadlines and subtasks use subtaskLabelPosition, parent tasks use taskLabelPosition
+        const isFromSubtask = depTask.isDeadline || depTask.start === depTask.end || (depTask.parentId != null);
+        const isToSubtask = task.isDeadline || task.start === task.end || (task.parentId != null);
+        
+        const fromLabelPosition = isFromSubtask ? subtaskLabelPosition : taskLabelPosition;
+        const toLabelPosition = isToSubtask ? subtaskLabelPosition : taskLabelPosition;
+        
+        // Calculate Y position based on label position (bar is at bottom when 'top' label)
+        const getBarCenterY = (rowIdx, labelPos) => {
+          if (labelPos === 'top') {
+            // Bar is at bottom of row with pb-1 (4px padding)
+            return rowIdx * rowHeight + rowHeight - barHeightPx / 2 - 4;
+          }
+          // Bar is centered in row
+          return rowIdx * rowHeight + rowHeight / 2;
+        };
+
         // Start from end of source bar, end at start of target bar
         const fromX = fromPos.left + fromPos.width;
-        const fromY = fromRowIndex * rowHeight + rowHeight / 2;
+        const fromY = getBarCenterY(fromRowIndex, fromLabelPosition);
         const toX = toPos.left;
-        const toY = toRowIndex * rowHeight + rowHeight / 2;
+        const toY = getBarCenterY(toRowIndex, toLabelPosition);
 
         const goingDown = toY > fromY;
         const verticalDistance = Math.abs(toY - fromY);
@@ -1275,7 +1411,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             </div>
 
             {/* Chart Content */}
-            <div className="relative" style={{ height: totalHeight }}>
+            <div className="relative" style={{ height: totalHeight, paddingTop: taskLabelPosition === 'top' ? 16 : 0 }}>
               {/* Grid Lines - rendered dynamically based on granularity */}
               <GridLines />
 
@@ -1294,19 +1430,21 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
 
               {/* Today Line */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-cyan-400 via-cyan-500 to-cyan-400 z-10 shadow-lg shadow-cyan-500/50"
+                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-cyan-400 via-cyan-500 to-cyan-400 z-30 shadow-lg shadow-cyan-500/50"
                 style={{ left: `${getTodayPosition()}px` }}
               >
                 <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-cyan-400 rounded-full" />
               </div>
 
               {/* Dependency Lines */}
-              <svg 
-                className="absolute top-0 left-0 pointer-events-none overflow-visible" 
-                style={{ zIndex: 5, width: totalWidth, height: totalHeight }}
-              >
-                <DependencyLines />
-              </svg>
+              {showDependencyLines && (
+                <svg 
+                  className="absolute top-0 left-0 pointer-events-none overflow-visible" 
+                  style={{ zIndex: 5, width: totalWidth, height: totalHeight }}
+                >
+                  <DependencyLines />
+                </svg>
+              )}
 
               {/* Task Bars - memoized for performance */}
               {taskBarsRendered}

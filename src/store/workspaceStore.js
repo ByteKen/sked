@@ -15,6 +15,7 @@ export const useWorkspaceStore = create(
     currentWorkspaceId: null,
     loading: true,
     unsubscribe: null,
+    isSwitching: false,  // Flag to prevent listener from overriding during switch
 
     // Get current workspace
     getCurrentWorkspace: () => {
@@ -51,14 +52,28 @@ export const useWorkspaceStore = create(
           // Get current state to compare
           const currentState = get();
           
-          // Set current workspace to last used, or first available
-          let newCurrentWorkspaceId = null;
-          if (lastWorkspaceId && newWorkspaces[lastWorkspaceId]) {
-            newCurrentWorkspaceId = lastWorkspaceId;
-          } else {
-            const workspaceIds = Object.keys(newWorkspaces);
-            if (workspaceIds.length > 0) {
-              newCurrentWorkspaceId = workspaceIds[0];
+          // Skip if we're in the middle of a switch operation
+          if (currentState.isSwitching) {
+            // Only update workspaces, not currentWorkspaceId
+            const workspacesChanged = JSON.stringify(currentState.workspaces) !== JSON.stringify(newWorkspaces);
+            if (workspacesChanged) {
+              set({ workspaces: newWorkspaces, loading: false });
+            }
+            return;
+          }
+          
+          // Only set currentWorkspaceId from Firestore if:
+          // 1. We don't have one yet (initial load), OR
+          // 2. The current one no longer exists in workspaces (was deleted)
+          let newCurrentWorkspaceId = currentState.currentWorkspaceId;
+          
+          if (!newCurrentWorkspaceId || !newWorkspaces[newCurrentWorkspaceId]) {
+            // Need to pick a workspace from Firestore
+            if (lastWorkspaceId && newWorkspaces[lastWorkspaceId]) {
+              newCurrentWorkspaceId = lastWorkspaceId;
+            } else {
+              const workspaceIds = Object.keys(newWorkspaces);
+              newCurrentWorkspaceId = workspaceIds.length > 0 ? workspaceIds[0] : null;
             }
           }
 
@@ -135,23 +150,30 @@ export const useWorkspaceStore = create(
       const user = auth.currentUser;
       if (!user) return;
 
-      const { workspaces, currentWorkspaceId } = get();
+      const { workspaces, currentWorkspaceId, isSwitching } = get();
+      
+      // Prevent concurrent switches
+      if (isSwitching) return;
       if (!workspaces[workspaceId]) return;
       
       // Don't switch if already on this workspace
       if (currentWorkspaceId === workspaceId) return;
 
       try {
-        // Update local state immediately for responsiveness
-        set({ currentWorkspaceId: workspaceId });
+        // Set switching flag and update workspace
+        set({ currentWorkspaceId: workspaceId, isSwitching: true });
         
         const userDocRef = doc(db, 'users', user.uid);
         await setDoc(userDocRef, {
           lastWorkspaceId: workspaceId,
           updatedAt: serverTimestamp(),
         }, { merge: true });
+        
+        // Clear switching flag after Firestore write completes
+        set({ isSwitching: false });
       } catch (err) {
         console.error('Failed to switch workspace:', err);
+        set({ isSwitching: false });
       }
     },
 

@@ -3,7 +3,7 @@ import { X, Check, Calendar, Clock, Target, CheckCircle2, Play, AlertCircle } fr
 import { usePreferencesStore } from '../store/preferencesStore';
 import { useGanttStore } from '../store/ganttStore';
 
-export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask = false, parentTask = null }) {
+export default function TaskModal({ task, onSave, onClose, allTasks = [], isSubtask = false, parentTask = null }) {
   const { theme } = usePreferencesStore();
   const { findTaskById } = useGanttStore();
   const [isDeadlineOnly, setIsDeadlineOnly] = useState(task?.isDeadline || false);
@@ -71,9 +71,9 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
   const handleDependencyToggle = (taskId) => {
     setFormData((prev) => ({
       ...prev,
-      dependencies: prev.dependencies.includes(taskId)
+      dependencies: prev.dependencies?.includes(taskId)
         ? prev.dependencies.filter((id) => id !== taskId)
-        : [...prev.dependencies, taskId],
+        : [...(prev.dependencies || []), taskId],
     }));
   };
 
@@ -151,20 +151,6 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
     });
   };
 
-  const validateDependencies = (dependencies, taskId) => {
-    // Check for self-reference
-    if (dependencies.includes(taskId)) {
-      return { 
-        valid: false, 
-        error: 'Invalid dependency', 
-        description: 'A task cannot depend on itself.' 
-      };
-    }
-    
-    // Could add circular dependency check here if needed
-    return { valid: true };
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     setValidationError(null);
@@ -195,13 +181,6 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
         setValidationError(subtaskDateValidation);
         return;
       }
-    }
-    
-    // Validate dependencies
-    const depValidation = validateDependencies(formData.dependencies, task?.id);
-    if (!depValidation.valid) {
-      setValidationError(depValidation);
-      return;
     }
     
     // For subtasks, set progress based on isDone
@@ -531,8 +510,8 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
             </div>
           )}
 
-          {/* Dependencies - simplified */}
-          {allTasks.length > (task ? 1 : 0) && (
+          {/* Dependencies - only show for parent tasks, not subtasks */}
+          {!isSubtask && !parent && allTasks.length > (task ? 1 : 0) && (
             <div className="space-y-2">
               <label className={`text-xs font-medium ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>Dependent on</label>
               <div className={`space-y-1 max-h-32 overflow-y-auto p-2 rounded-xl ${
@@ -546,7 +525,7 @@ export default function TaskModal({ task, onSave, onClose, allTasks, isSubtask =
                     }`}>
                       <input
                         type="checkbox"
-                        checked={formData.dependencies.includes(t.id)}
+                        checked={formData.dependencies?.includes(t.id) || false}
                         onChange={() => handleDependencyToggle(t.id)}
                         className={`w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 ${
                           theme === 'dark' ? 'border-slate-600 bg-slate-700' : 'border-slate-300 bg-white'

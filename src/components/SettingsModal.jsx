@@ -1,4 +1,4 @@
-import { X, Settings, Moon, Sun, Diamond, Circle, Printer, Type, GitBranch, Minimize2 } from 'lucide-react';
+import { X, Settings, Moon, Sun, Diamond, Circle, Printer, Type, GitBranch, Minimize2, Link2, Share2 } from 'lucide-react';
 import { usePreferencesStore } from '../store/preferencesStore';
 
 export default function SettingsModal({ onClose }) {
@@ -7,14 +7,20 @@ export default function SettingsModal({ onClose }) {
     theme, 
     exportTheme,
     taskLabelPosition,
+    subtaskLabelPosition,
     showDependencyLinesOnExport,
     barHeight,
+    showDependencyLines,
+    showSubtaskConnectors,
     toggleSubtaskShape, 
     toggleTheme,
     setExportTheme,
     setTaskLabelPosition,
+    setSubtaskLabelPosition,
     toggleShowDependencyLinesOnExport,
     setBarHeight,
+    toggleShowDependencyLines,
+    toggleShowSubtaskConnectors,
   } = usePreferencesStore();
 
   return (
@@ -235,6 +241,7 @@ export default function SettingsModal({ onClose }) {
               {[
                 { value: 'inside', label: 'Inside' },
                 { value: 'outside', label: 'Outside' },
+                { value: 'top', label: 'Top' },
                 { value: 'hidden', label: 'Hidden' }
               ].map((option) => (
                 <button
@@ -251,6 +258,128 @@ export default function SettingsModal({ onClose }) {
                   {option.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Subtask Label Position */}
+          <div className={`p-4 rounded-xl border ${
+            theme === 'dark' 
+              ? 'bg-slate-800/50 border-slate-700/50' 
+              : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3 mb-3">
+              <Type className={`w-5 h-5 ${
+                theme === 'dark' ? 'text-orange-400' : 'text-orange-500'
+              }`} />
+              <div>
+                <p className={`font-medium ${
+                  theme === 'dark' ? 'text-slate-200' : 'text-slate-900'
+                }`}>Subtask Label Position</p>
+                <p className={`text-xs ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>Where to show subtask names</p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {[
+                { value: 'outside', label: 'Outside' },
+                { value: 'top', label: 'Top' },
+                { value: 'hidden', label: 'Hidden' }
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setSubtaskLabelPosition(option.value)}
+                  className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                    subtaskLabelPosition === option.value
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
+                      : theme === 'dark'
+                        ? 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dependency Lines Toggle */}
+          <div className={`p-4 rounded-xl border ${
+            theme === 'dark' 
+              ? 'bg-slate-800/50 border-slate-700/50' 
+              : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <GitBranch className={`w-5 h-5 ${
+                  showDependencyLines ? 'text-blue-400' : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+                }`} />
+                <div>
+                  <p className={`font-medium ${
+                    theme === 'dark' ? 'text-slate-200' : 'text-slate-900'
+                  }`}>Dependency Lines</p>
+                  <p className={`text-xs ${
+                    theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
+                    {showDependencyLines 
+                      ? 'Show arrows between dependent tasks' 
+                      : 'Hide dependency arrows'
+                    }
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleShowDependencyLines}
+                className={`relative w-14 h-8 rounded-full transition-colors ${
+                  showDependencyLines 
+                    ? 'bg-blue-500' 
+                    : 'bg-slate-500'
+                }`}
+              >
+                <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                  showDependencyLines ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Subtask Connectors Toggle */}
+          <div className={`p-4 rounded-xl border ${
+            theme === 'dark' 
+              ? 'bg-slate-800/50 border-slate-700/50' 
+              : 'bg-slate-50 border-slate-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Share2 className={`w-5 h-5 ${
+                  showSubtaskConnectors ? 'text-emerald-400' : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+                }`} />
+                <div>
+                  <p className={`font-medium ${
+                    theme === 'dark' ? 'text-slate-200' : 'text-slate-900'
+                  }`}>Subtask Connectors</p>
+                  <p className={`text-xs ${
+                    theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
+                    {showSubtaskConnectors 
+                      ? 'Show lines from parent to subtasks' 
+                      : 'Hide parent-subtask connectors'
+                    }
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={toggleShowSubtaskConnectors}
+                className={`relative w-14 h-8 rounded-full transition-colors ${
+                  showSubtaskConnectors 
+                    ? 'bg-emerald-500' 
+                    : 'bg-slate-500'
+                }`}
+              >
+                <div className={`absolute top-1 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
+                  showSubtaskConnectors ? 'left-7' : 'left-1'
+                }`} />
+              </button>
             </div>
           </div>
 

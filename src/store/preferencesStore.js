@@ -8,9 +8,12 @@ const defaultPreferences = {
   useRoundedSubtasks: false, // false = diamond shape (default), true = rounded corners like parent
   theme: 'dark', // 'dark' or 'light'
   exportTheme: 'light', // Export always uses light theme for printing - saves ink/toner
-  taskLabelPosition: 'inside', // 'inside', 'outside', or 'hidden'
+  taskLabelPosition: 'inside', // 'inside', 'outside', 'top', or 'hidden'
+  subtaskLabelPosition: 'outside', // 'outside', 'top', or 'hidden' (no 'inside' for subtasks)
   showDependencyLinesOnExport: false, // Hide dependency lines on export by default
   barHeight: 'compact', // 'compact' (like monday.com), 'normal', or 'large'
+  showDependencyLines: true, // Show dependency arrows between tasks
+  showSubtaskConnectors: true, // Show L-shaped connectors from parent to subtasks
 };
 
 export const usePreferencesStore = create(
@@ -45,8 +48,11 @@ export const usePreferencesStore = create(
             theme: prefs.theme ?? defaultPreferences.theme,
             exportTheme: prefs.exportTheme ?? defaultPreferences.exportTheme,
             taskLabelPosition: prefs.taskLabelPosition ?? defaultPreferences.taskLabelPosition,
+            subtaskLabelPosition: prefs.subtaskLabelPosition ?? defaultPreferences.subtaskLabelPosition,
             showDependencyLinesOnExport: prefs.showDependencyLinesOnExport ?? defaultPreferences.showDependencyLinesOnExport,
             barHeight: prefs.barHeight ?? defaultPreferences.barHeight,
+            showDependencyLines: prefs.showDependencyLines ?? defaultPreferences.showDependencyLines,
+            showSubtaskConnectors: prefs.showSubtaskConnectors ?? defaultPreferences.showSubtaskConnectors,
           };
           
           // Only update if preferences actually changed
@@ -55,8 +61,11 @@ export const usePreferencesStore = create(
             currentState.theme !== newPrefs.theme ||
             currentState.exportTheme !== newPrefs.exportTheme ||
             currentState.taskLabelPosition !== newPrefs.taskLabelPosition ||
+            currentState.subtaskLabelPosition !== newPrefs.subtaskLabelPosition ||
             currentState.showDependencyLinesOnExport !== newPrefs.showDependencyLinesOnExport ||
             currentState.barHeight !== newPrefs.barHeight ||
+            currentState.showDependencyLines !== newPrefs.showDependencyLines ||
+            currentState.showSubtaskConnectors !== newPrefs.showSubtaskConnectors ||
             currentState.loading !== false;
           
           if (prefsChanged) {
@@ -137,6 +146,14 @@ export const usePreferencesStore = create(
       });
     },
 
+    // Set subtask label position
+    setSubtaskLabelPosition: (subtaskLabelPosition) => {
+      set((state) => {
+        get().persistPreferences({ ...state, subtaskLabelPosition });
+        return { subtaskLabelPosition };
+      });
+    },
+
     // Toggle dependency lines on export
     toggleShowDependencyLinesOnExport: () => {
       set((state) => {
@@ -151,6 +168,24 @@ export const usePreferencesStore = create(
       set((state) => {
         get().persistPreferences({ ...state, barHeight });
         return { barHeight };
+      });
+    },
+
+    // Toggle dependency lines visibility
+    toggleShowDependencyLines: () => {
+      set((state) => {
+        const newValue = !state.showDependencyLines;
+        get().persistPreferences({ ...state, showDependencyLines: newValue });
+        return { showDependencyLines: newValue };
+      });
+    },
+
+    // Toggle subtask connectors visibility
+    toggleShowSubtaskConnectors: () => {
+      set((state) => {
+        const newValue = !state.showSubtaskConnectors;
+        get().persistPreferences({ ...state, showSubtaskConnectors: newValue });
+        return { showSubtaskConnectors: newValue };
       });
     },
 
@@ -169,8 +204,11 @@ export const usePreferencesStore = create(
           theme: prefs.theme,
           exportTheme: prefs.exportTheme,
           taskLabelPosition: prefs.taskLabelPosition,
+          subtaskLabelPosition: prefs.subtaskLabelPosition,
           showDependencyLinesOnExport: prefs.showDependencyLinesOnExport,
           barHeight: prefs.barHeight,
+          showDependencyLines: prefs.showDependencyLines,
+          showSubtaskConnectors: prefs.showSubtaskConnectors,
         };
         
         await setDoc(userDocRef, {

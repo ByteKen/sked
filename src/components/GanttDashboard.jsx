@@ -3,6 +3,7 @@ import {
   Plus,
   LogOut,
   Download,
+  Upload,
   Search,
   ChevronDown,
   ChevronRight,
@@ -28,13 +29,14 @@ import ExportMenu from './ExportMenu';
 import SettingsModal from './SettingsModal';
 import WorkspaceSelector from './WorkspaceSelector';
 import ConfirmationModal from './ConfirmationModal';
+import ImportModal from './ImportModal';
 
 export default function GanttDashboard({ onGoHome }) {
   const { user, logout } = useAuthStore();
   const { tasks, initTasks, cleanup, addTask, updateTask, deleteTask, addSubtask, findTaskById } = useGanttStore();
   const { 
+    workspaces,
     currentWorkspaceId, 
-    getCurrentWorkspace,
   } = useWorkspaceStore();
   const { theme, exportTheme, useRoundedSubtasks, showDependencyLinesOnExport, barHeight, taskLabelPosition } = usePreferencesStore();
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,9 +51,11 @@ export default function GanttDashboard({ onGoHome }) {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [mobileView, setMobileView] = useState('chart'); // 'chart' | 'list'
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const ganttChartRef = useRef(null);
 
-  const currentWorkspace = getCurrentWorkspace();
+  // Derive current workspace from reactive state
+  const currentWorkspace = currentWorkspaceId ? workspaces[currentWorkspaceId] : null;
 
   // Initialize tasks when workspace changes
   useEffect(() => {
@@ -139,6 +143,70 @@ export default function GanttDashboard({ onGoHome }) {
     }
     setShowExportMenu(false);
   };
+
+  // Handle bulk import from JSON
+  const handleImport = useCallback((importedTasks) => {
+    // Map to track original ID/index -> new task ID for dependency resolution
+    const idMapping = new Map();
+    
+    // First pass: Add all tasks and build ID mapping
+    const addTaskWithChildren = (taskData, parentId = null, originalIndex = null) => {
+      const { children, dependencies, id: originalId, ...taskWithoutChildren } = taskData;
+      
+      // Temporarily remove dependencies, we'll add them in second pass
+      const taskToAdd = { ...taskWithoutChildren, dependencies: [] };
+      
+      let newTask;
+      if (parentId) {
+        newTask = addSubtask(parentId, taskToAdd);
+      } else {
+        newTask = addTask(taskToAdd);
+      }
+      
+      // Store mapping: original ID (if provided) or 1-based index -> new task ID
+      // Support both string and number IDs
+      if (originalId !== undefined && originalId !== null) {
+        idMapping.set(String(originalId), newTask.id);
+        idMapping.set(Number(originalId), newTask.id);
+      }
+      if (originalIndex !== null) {
+        idMapping.set(originalIndex, newTask.id);
+        idMapping.set(String(originalIndex), newTask.id);
+      }
+      
+      // Store the original dependencies for later
+      if (dependencies && dependencies.length > 0) {
+        newTask._originalDependencies = dependencies;
+      }
+      
+      // Recursively add children
+      if (children && children.length > 0) {
+        children.forEach((child) => {
+          addTaskWithChildren(child, newTask.id, null);
+        });
+      }
+      
+      return newTask;
+    };
+    
+    // Add all tasks (first pass)
+    const createdTasks = importedTasks.map((task, index) => {
+      return addTaskWithChildren(task, null, index + 1); // 1-based index to match template
+    });
+    
+    // Second pass: Update dependencies with correct IDs
+    createdTasks.forEach((task) => {
+      if (task._originalDependencies && task._originalDependencies.length > 0) {
+        const mappedDependencies = task._originalDependencies
+          .map(origId => idMapping.get(origId) || idMapping.get(String(origId)) || idMapping.get(Number(origId)))
+          .filter(id => id !== undefined);
+        
+        if (mappedDependencies.length > 0) {
+          updateTask(task.id, { dependencies: mappedDependencies });
+        }
+      }
+    });
+  }, [addTask, addSubtask, updateTask]);
 
   const visibleTasks = useMemo(() => 
     searchTerm ? filterTasks(tasks, searchTerm) : tasks,
@@ -270,6 +338,20 @@ export default function GanttDashboard({ onGoHome }) {
                   title="Settings"
                 >
                   <Settings className="w-4 h-4" />
+                </button>
+
+                {/* Import Button - Desktop only */}
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className={`hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium rounded-xl border transition-all ${
+                    theme === 'dark'
+                      ? 'bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 border-emerald-500/20 hover:border-emerald-500/30'
+                      : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-600 hover:text-emerald-700 border-emerald-200 hover:border-emerald-300'
+                  }`}
+                  title="Import tasks from JSON"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span className="hidden md:inline">Import</span>
                 </button>
 
                 {/* Export - Desktop only */}
@@ -532,6 +614,14 @@ export default function GanttDashboard({ onGoHome }) {
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}
 
+      {/* Import modal */}
+      {showImportModal && (
+        <ImportModal
+          onImport={handleImport}
+          onClose={() => setShowImportModal(false)}
+        />
+      )}
+
       {/* Delete Task Confirmation */}
       <ConfirmationModal
         isOpen={!!deleteConfirmTask}
@@ -618,6 +708,19 @@ export default function GanttDashboard({ onGoHome }) {
             >
               <Settings className="w-5 h-5" />
               <span className="text-[10px] font-medium">Settings</span>
+            </button>
+
+            {/* Import */}
+            <button
+              onClick={() => setShowImportModal(true)}
+              className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
+                theme === 'dark'
+                  ? 'text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10'
+                  : 'text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100'
+              }`}
+            >
+              <Upload className="w-5 h-5" />
+              <span className="text-[10px] font-medium">Import</span>
             </button>
 
             {/* Export / More */}
