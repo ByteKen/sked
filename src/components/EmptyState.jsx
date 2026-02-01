@@ -58,7 +58,7 @@ export default function EmptyState() {
       <div className="max-w-md w-full text-center">
         {/* Icon */}
         <div className="relative inline-flex mb-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-3xl blur-xl opacity-30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-3xl blur-xl opacity-30" />
           <div className={`relative w-20 h-20 rounded-3xl flex items-center justify-center ${
             isDark 
               ? 'bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700' 
@@ -122,7 +122,7 @@ export default function EmptyState() {
             <button
               onClick={handleCreate}
               disabled={isCreating}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-400 hover:to-violet-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all"
+              className="w-full py-3 bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-400 hover:to-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all"
             >
               {isCreating ? (
                 <span className="flex items-center justify-center gap-2">

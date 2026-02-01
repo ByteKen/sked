@@ -34,12 +34,15 @@ export default function SettingsModal({ onClose }) {
       {/* Modal */}
       <div className={`relative w-full max-w-md mx-4 max-h-[90vh] rounded-2xl shadow-2xl border overflow-hidden flex flex-col ${
         theme === 'dark' 
-          ? 'bg-slate-900 border-slate-700/50' 
-          : 'bg-white border-slate-200'
+          ? 'bg-[#0f1622] border-white/[0.08]' 
+          : 'bg-white border-slate-200/60'
       }`}>
+        {/* Gradient accent */}
+        <div className="h-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-500" />
+        
         {/* Header */}
         <div className={`flex items-center justify-between p-4 border-b ${
-          theme === 'dark' ? 'border-slate-700/50' : 'border-slate-200'
+          theme === 'dark' ? 'border-white/[0.06]' : 'border-slate-200/60'
         }`}>
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -484,7 +487,7 @@ export default function SettingsModal({ onClose }) {
         }`}>
           <button
             onClick={onClose}
-            className="px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-violet-500 hover:from-cyan-400 hover:to-violet-400 text-white font-semibold rounded-lg transition shadow-lg shadow-cyan-500/25"
+            className="px-6 py-2.5 bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-400 hover:to-indigo-400 text-white font-semibold rounded-lg transition shadow-lg shadow-violet-500/25"
           >
             Done
           </button>

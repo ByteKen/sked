@@ -217,33 +217,51 @@ export default function GanttDashboard({ onGoHome }) {
     <div className={`min-h-screen ${
       isChartExpanded ? 'overflow-y-auto overflow-x-hidden' : ''
     } ${
-      theme === 'dark' ? 'bg-[#0f1419]' : 'bg-slate-100'
+      theme === 'dark' ? 'bg-[#08090d]' : 'bg-[#f8fafc]'
     }`}>
-      {/* Subtle animated background */}
+      {/* Mesh gradient background with floating orbs - matching HomePage */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {theme === 'dark' ? (
-          <>
-            <div className="absolute -top-1/2 -left-1/4 w-[800px] h-[800px] bg-gradient-to-r from-violet-600/8 to-cyan-500/8 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-            <div className="absolute -bottom-1/2 -right-1/4 w-[600px] h-[600px] bg-gradient-to-r from-blue-600/8 to-purple-500/8 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
-          </>
-        ) : (
-          <>
-            <div className="absolute -top-1/2 -left-1/4 w-[800px] h-[800px] bg-gradient-to-r from-violet-200/30 to-cyan-200/30 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }} />
-            <div className="absolute -bottom-1/2 -right-1/4 w-[600px] h-[600px] bg-gradient-to-r from-blue-200/30 to-purple-200/30 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
-          </>
-        )}
+        {/* Base gradient mesh */}
+        <div className={`absolute inset-0 ${
+          theme === 'dark' 
+            ? 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-900/20 via-transparent to-transparent'
+            : 'bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-100/50 via-transparent to-transparent'
+        }`} />
+        
+        {/* Floating orbs */}
+        <div className={`absolute top-20 left-[10%] w-72 h-72 rounded-full blur-[100px] animate-float ${
+          theme === 'dark' ? 'bg-violet-600/10' : 'bg-violet-300/30'
+        }`} style={{ animationDelay: '0s', animationDuration: '20s' }} />
+        <div className={`absolute top-40 right-[15%] w-96 h-96 rounded-full blur-[120px] animate-float ${
+          theme === 'dark' ? 'bg-cyan-600/10' : 'bg-cyan-300/25'
+        }`} style={{ animationDelay: '5s', animationDuration: '25s' }} />
+        <div className={`absolute bottom-20 left-[20%] w-80 h-80 rounded-full blur-[100px] animate-float ${
+          theme === 'dark' ? 'bg-indigo-600/10' : 'bg-indigo-300/25'
+        }`} style={{ animationDelay: '10s', animationDuration: '22s' }} />
+        
+        {/* Subtle noise texture overlay */}
+        <div className="absolute inset-0 opacity-[0.015]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
+        }} />
+        
+        {/* Grid pattern */}
+        <div className={`absolute inset-0 ${
+          theme === 'dark' 
+            ? 'bg-[linear-gradient(rgba(255,255,255,.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.02)_1px,transparent_1px)]'
+            : 'bg-[linear-gradient(rgba(0,0,0,.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,.03)_1px,transparent_1px)]'
+        } bg-[size:64px_64px]`} />
       </div>
 
       {/* Header - hidden when chart is expanded */}
       {!isChartExpanded && (
       <header className="relative sticky top-0 z-40">
         {/* Gradient line accent */}
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-60" />
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-violet-500 to-transparent opacity-60" />
         
-        <div className={`backdrop-blur-2xl border-b ${
+        <div className={`backdrop-blur-xl border-b ${
           theme === 'dark' 
-            ? 'bg-slate-900/70 border-white/5' 
-            : 'bg-white/70 border-slate-200'
+            ? 'bg-[#08090d]/80 border-white/[0.06]' 
+            : 'bg-white/70 border-slate-200/60'
         }`}>
           <div className="px-3 sm:px-6 py-3">
             <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -266,8 +284,8 @@ export default function GanttDashboard({ onGoHome }) {
                   className="relative group cursor-pointer"
                   title="All Workspaces"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-xl blur-lg opacity-40 group-hover:opacity-70 transition-opacity" />
-                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-xl blur-lg opacity-40 group-hover:opacity-70 transition-opacity" />
+                  <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-violet-500 via-indigo-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                     <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
@@ -293,7 +311,7 @@ export default function GanttDashboard({ onGoHome }) {
               {/* Center Search - Desktop */}
               <div className="flex-1 max-w-md mx-4 hidden lg:block">
                 <div className="relative group">
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/20 to-violet-500/20 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-500/20 to-cyan-500/20 rounded-xl blur opacity-0 group-focus-within:opacity-100 transition-opacity" />
                   <div className="relative">
                     <Search className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${
                       theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
@@ -376,7 +394,7 @@ export default function GanttDashboard({ onGoHome }) {
                   onClick={handleAddTask}
                   className="group relative inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 text-sm font-semibold rounded-xl transition-all overflow-hidden"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 transition-transform group-hover:scale-105" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-500 transition-transform group-hover:scale-105" />
                   <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-violet-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                   <Plus className="relative w-4 h-4 text-white" />
                   <span className="relative text-white hidden sm:inline">Add Task</span>
@@ -442,7 +460,7 @@ export default function GanttDashboard({ onGoHome }) {
               theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
             }`}>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-br from-cyan-400 via-blue-500 to-violet-500 rounded-lg flex items-center justify-center">
+                <div className="w-8 h-8 bg-gradient-to-br from-violet-500 via-indigo-500 to-cyan-500 rounded-lg flex items-center justify-center">
                   <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
@@ -661,7 +679,7 @@ export default function GanttDashboard({ onGoHome }) {
               onClick={() => setMobileView('chart')}
               className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all ${
                 mobileView === 'chart'
-                  ? 'bg-gradient-to-r from-cyan-500 to-violet-500 text-white'
+                  ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white'
                   : theme === 'dark'
                     ? 'text-slate-400 hover:text-white hover:bg-white/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
@@ -689,7 +707,7 @@ export default function GanttDashboard({ onGoHome }) {
               onClick={handleAddTask}
               className="flex flex-col items-center gap-1 -mt-4"
             >
-              <div className="w-12 h-12 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/30">
+              <div className="w-12 h-12 bg-gradient-to-r from-violet-500 to-indigo-500 rounded-full flex items-center justify-center shadow-lg shadow-violet-500/30">
                 <Plus className="w-6 h-6 text-white" />
               </div>
               <span className={`text-[10px] font-medium ${

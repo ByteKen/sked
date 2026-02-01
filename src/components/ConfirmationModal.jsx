@@ -55,8 +55,8 @@ export default function ConfirmationModal({
       <div 
         className={`w-full max-w-sm rounded-2xl shadow-2xl border overflow-hidden animate-scale-in ${
           theme === 'dark'
-            ? 'bg-slate-900 border-white/10'
-            : 'bg-white border-slate-200'
+            ? 'bg-[#0f1622] border-white/[0.08]'
+            : 'bg-white border-slate-200/60'
         }`}
       >
         {/* Accent gradient */}

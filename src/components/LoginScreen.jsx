@@ -14,49 +14,48 @@ export default function LoginScreen() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center p-4 overflow-hidden">
-      {/* Subtle background elements */}
-      <div className="fixed inset-0">
-        {/* Soft gradient orbs */}
-        <div className="absolute top-0 -left-1/4 w-[600px] h-[600px] bg-gradient-to-r from-cyan-200/40 to-transparent rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 -right-1/4 w-[500px] h-[500px] bg-gradient-to-l from-violet-200/40 to-transparent rounded-full blur-[100px]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-gradient-to-br from-blue-100/30 to-purple-100/30 rounded-full blur-[80px]" />
-        
-        {/* Subtle grid pattern */}
-        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,.03)_1px,transparent_1px)] bg-[size:48px_48px]" />
-      </div>
-
-      {/* Decorative floating shapes */}
+    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-4 overflow-hidden">
+      {/* Mesh gradient background with floating orbs - matching HomePage */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-20 w-3 h-3 bg-cyan-400 rounded-full opacity-60 animate-pulse" style={{ animationDuration: '3s' }} />
-        <div className="absolute top-40 right-32 w-2 h-2 bg-violet-400 rounded-full opacity-60 animate-pulse" style={{ animationDuration: '4s', animationDelay: '1s' }} />
-        <div className="absolute bottom-32 left-1/4 w-2 h-2 bg-blue-400 rounded-full opacity-60 animate-pulse" style={{ animationDuration: '5s', animationDelay: '2s' }} />
-        <div className="absolute top-1/3 right-20 w-32 h-32 border border-slate-200 rounded-full" />
-        <div className="absolute bottom-1/4 left-16 w-40 h-40 border border-slate-200/50 rounded-full" />
+        {/* Base gradient mesh */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-100/50 via-transparent to-transparent" />
+        
+        {/* Floating orbs */}
+        <div className="absolute top-20 left-[10%] w-72 h-72 rounded-full blur-[100px] animate-float bg-violet-300/30" style={{ animationDelay: '0s', animationDuration: '20s' }} />
+        <div className="absolute top-40 right-[15%] w-96 h-96 rounded-full blur-[120px] animate-float bg-cyan-300/25" style={{ animationDelay: '5s', animationDuration: '25s' }} />
+        <div className="absolute bottom-20 left-[20%] w-80 h-80 rounded-full blur-[100px] animate-float bg-indigo-300/25" style={{ animationDelay: '10s', animationDuration: '22s' }} />
+        
+        {/* Subtle noise texture overlay */}
+        <div className="absolute inset-0 opacity-[0.015]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E")`
+        }} />
+        
+        {/* Grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,.03)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,.03)_1px,transparent_1px)] bg-[size:64px_64px]" />
       </div>
 
       {/* Login card */}
       <div className="relative w-full max-w-[420px] z-10">
-        {/* Card shadow */}
-        <div className="absolute -inset-4 bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-cyan-500/10 rounded-[32px] blur-2xl" />
+        {/* Card glow effect */}
+        <div className="absolute -inset-4 bg-gradient-to-r from-violet-500/20 via-indigo-500/20 to-cyan-500/20 rounded-[32px] blur-2xl opacity-50" />
         
         {/* Card */}
-        <div className="relative bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+        <div className="relative bg-white/70 backdrop-blur-xl rounded-3xl border border-white/80 shadow-2xl shadow-slate-900/5 overflow-hidden">
           {/* Top gradient accent */}
-          <div className="h-1.5 bg-gradient-to-r from-cyan-500 via-violet-500 to-purple-500" />
+          <div className="h-1.5 bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-500" />
           
           <div className="p-8 sm:p-10">
             {/* Header */}
             <div className="text-center mb-10">
               {/* Logo */}
               <div className="relative inline-flex mb-6">
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 rounded-2xl blur-xl opacity-30" />
-                <div className="relative w-20 h-20 bg-gradient-to-br from-cyan-500 via-blue-500 to-violet-600 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-2xl blur-xl opacity-40 animate-pulse" style={{ animationDuration: '3s' }} />
+                <div className="relative w-20 h-20 bg-gradient-to-br from-violet-500 via-indigo-500 to-cyan-500 rounded-2xl flex items-center justify-center shadow-xl shadow-violet-500/25 transform hover:scale-105 transition-transform">
                   <BarChart3 className="w-10 h-10 text-white" strokeWidth={2} />
                 </div>
               </div>
               
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">
                 Gantt Pro
               </h1>
               <p className="text-slate-500 text-sm font-medium flex items-center justify-center gap-2">
@@ -79,7 +78,7 @@ export default function LoginScreen() {
 
               {/* Cancelled message - friendly, not alarming */}
               {cancelled && !error && (
-                <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+                <div className="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
                   <Info className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                   <div>
                     <p className="text-sm text-slate-600 font-medium">Sign-in cancelled</p>
@@ -100,12 +99,12 @@ export default function LoginScreen() {
               <button
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="group relative w-full py-4 px-6 rounded-xl font-semibold text-slate-700 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
+                className="group relative w-full py-4 px-6 rounded-2xl font-semibold text-slate-700 bg-white border border-slate-200 hover:border-violet-300 hover:bg-violet-50/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-slate-900/5 hover:shadow-xl hover:shadow-violet-500/10 active:scale-[0.98]"
               >
                 <span className="flex items-center justify-center gap-3">
                   {loading ? (
                     <>
-                      <Loader className="w-5 h-5 animate-spin text-slate-500" />
+                      <Loader className="w-5 h-5 animate-spin text-violet-500" />
                       <span className="text-slate-500">Signing in...</span>
                     </>
                   ) : (
@@ -125,7 +124,7 @@ export default function LoginScreen() {
             </div>
 
             {/* Footer */}
-            <div className="mt-10 pt-6 border-t border-slate-100 text-center">
+            <div className="mt-10 pt-6 border-t border-slate-100/80 text-center">
               <p className="text-xs text-slate-400">
                 Your data is securely stored in the cloud
               </p>

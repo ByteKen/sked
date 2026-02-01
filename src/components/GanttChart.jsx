@@ -309,29 +309,49 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     );
   }, []);
 
-  // Get bar gradient based on progress and working status
+  // Modern color palette - refined gradients for professional look
   const getBarStyle = useCallback((task) => {
-    // Green for completed tasks (100% progress or isDone)
+    // Completed: Emerald with subtle teal undertone
     if (task.progress === 100 || task.isDone) {
-      return { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)' };
+      return { 
+        background: theme === 'dark' 
+          ? 'linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%)' 
+          : 'linear-gradient(135deg, #6ee7b7 0%, #34d399 50%, #10b981 100%)',
+        boxShadow: '0 4px 14px -2px rgba(16, 185, 129, 0.35)'
+      };
     }
     
     // Check if this task or any of its children is currently being worked on
     const isActivelyWorking = task.isWorking || hasWorkingChild(task);
     
-    // Orange/amber for actively working tasks (or parents with working children)
+    // Working: Vibrant amber with warm glow
     if (isActivelyWorking) {
-      return { background: 'linear-gradient(135deg, #fdab3d 0%, #ff9f1a 100%)' };
+      return { 
+        background: theme === 'dark'
+          ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)'
+          : 'linear-gradient(135deg, #fcd34d 0%, #fbbf24 50%, #f59e0b 100%)',
+        boxShadow: '0 4px 14px -2px rgba(245, 158, 11, 0.4)'
+      };
     }
     
-    // Orange/amber for in-progress tasks (has some completed children)
+    // In Progress: Soft amber blend
     if (task.progress > 0) {
-      return { background: 'linear-gradient(135deg, #fdab3d 0%, #ff9f1a 100%)' };
+      return { 
+        background: theme === 'dark'
+          ? 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)'
+          : 'linear-gradient(135deg, #fcd34d 0%, #fbbf24 50%, #f59e0b 100%)',
+        boxShadow: '0 4px 14px -2px rgba(245, 158, 11, 0.3)'
+      };
     }
     
-    // Gray for not started / not working
-    return { background: 'linear-gradient(135deg, #64748b 0%, #475569 100%)' };
-  }, [hasWorkingChild]);
+    // Not Started: Cool slate with depth
+    return { 
+      background: theme === 'dark'
+        ? 'linear-gradient(135deg, #64748b 0%, #475569 50%, #334155 100%)'
+        : 'linear-gradient(135deg, #94a3b8 0%, #64748b 50%, #475569 100%)',
+      boxShadow: '0 4px 14px -2px rgba(71, 85, 105, 0.25)'
+    };
+  }, [hasWorkingChild, theme]);
 
   const toggleExpand = (taskId) => {
     setExpandedTasks((prev) => ({
@@ -358,12 +378,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
   // Memoize flattened task list to prevent recalculation on every render
   const flatTasksList = useMemo(() => flattenTasks(tasks), [tasks]);
 
-  // Render task names (sidebar)
+  // Render task names (sidebar) - Modern minimalist design
   const TaskNameComponent = ({ task, level = 0 }) => {
     const hasChildren = task.children && task.children.length > 0;
     const isExpanded = expandedTasks[task.id] !== false;
     const taskStartDate = new Date(task.start);
     const taskEndDate = new Date(task.end);
+    const isCompleted = task.progress === 100 || task.isDone;
     
     // Format date range - shorter on mobile
     const formatDate = (date) => {
@@ -378,67 +399,91 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     const isActivelyWorking = task.isWorking || hasWorkingChild(task);
 
     // Adjust indentation for mobile
-    const indentPx = isMobile ? 8 + level * 12 : 12 + level * 20;
+    const indentPx = isMobile ? 8 + level * 12 : 14 + level * 18;
 
     return (
       <div key={task.id}>
         <div
-          className={`flex items-center border-b transition-colors group ${
+          className={`flex items-center border-b transition-all duration-200 group relative ${
             theme === 'dark' 
-              ? 'border-slate-700/50 hover:bg-slate-800/40' 
-              : 'border-slate-200/50 hover:bg-slate-100/60'
+              ? 'border-white/[0.04] hover:bg-white/[0.03]' 
+              : 'border-slate-200/40 hover:bg-slate-100/40'
           }`}
           style={{ height: rowHeight, paddingLeft: `${indentPx}px` }}
         >
+          {/* Subtle left accent for parent tasks */}
+          {hasChildren && level === 0 && (
+            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-3/5 rounded-full ${
+              isCompleted 
+                ? 'bg-emerald-500/50' 
+                : isActivelyWorking 
+                  ? 'bg-amber-500/50' 
+                  : theme === 'dark' ? 'bg-indigo-500/30' : 'bg-indigo-400/40'
+            }`} />
+          )}
+          
           {/* Expand/Collapse Button */}
           {hasChildren ? (
             <button
               onClick={() => toggleExpand(task.id)}
-              className={`p-0.5 md:p-1 rounded-md transition mr-1 md:mr-2 ${
+              className={`p-1 md:p-1.5 rounded-lg transition-all duration-200 mr-1.5 md:mr-2 active:scale-90 ${
                 theme === 'dark' 
-                  ? 'hover:bg-slate-600/50' 
-                  : 'hover:bg-slate-200'
+                  ? 'hover:bg-white/10 text-slate-400 hover:text-slate-200' 
+                  : 'hover:bg-slate-200/80 text-slate-400 hover:text-slate-600'
               }`}
             >
-              {isExpanded ? (
-                <ChevronDown className={`w-3 h-3 md:w-4 md:h-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
-              ) : (
-                <ChevronRight className={`w-3 h-3 md:w-4 md:h-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
-              )}
+              <div className={`transition-transform duration-200 ${isExpanded ? 'rotate-0' : '-rotate-90'}`}>
+                <ChevronDown className="w-3 h-3 md:w-4 md:h-4" />
+              </div>
             </button>
           ) : (
-            <div className="w-4 md:w-6 mr-1 md:mr-2" />
+            <div className="w-5 md:w-7 mr-1.5 md:mr-2 flex-shrink-0" />
           )}
 
           {/* Task Info */}
-          <div className="flex-1 min-w-0 pr-1">
+          <div className="flex-1 min-w-0 pr-2">
             <div
-              className={`text-xs md:text-sm font-medium cursor-pointer truncate transition-colors flex items-center gap-1 md:gap-1.5 ${
-                theme === 'dark' 
-                  ? 'text-slate-200 hover:text-cyan-400' 
-                  : 'text-slate-700 hover:text-cyan-600'
+              className={`text-xs md:text-sm font-medium cursor-pointer truncate transition-all duration-200 flex items-center gap-1.5 md:gap-2 ${
+                isCompleted
+                  ? theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'
+                  : theme === 'dark' 
+                    ? 'text-slate-200 group-hover:text-white' 
+                    : 'text-slate-700 group-hover:text-slate-900'
               }`}
               onClick={() => onTaskClick?.(task.id)}
               onDoubleClick={() => onTaskEdit?.(task)}
             >
-              {/* Working indicator */}
+              {/* Working indicator - Modern pulsing ring */}
               {isActivelyWorking && (
-                <span className="inline-flex items-center justify-center w-3 h-3 md:w-4 md:h-4 bg-amber-500 rounded-full animate-pulse flex-shrink-0" title="Currently working">
-                  <span className="w-1 h-1 md:w-1.5 md:h-1.5 bg-white rounded-full" />
+                <span className="relative flex items-center justify-center w-4 h-4 flex-shrink-0" title="Currently working">
+                  <span className="absolute inset-0 bg-amber-400/30 rounded-full animate-ping" />
+                  <span className="relative w-2.5 h-2.5 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full shadow-sm shadow-amber-500/50" />
                 </span>
               )}
-              <span className="truncate">{task.name}</span>
+              {/* Completed checkmark */}
+              {isCompleted && !isActivelyWorking && (
+                <span className={`flex items-center justify-center w-4 h-4 rounded-full flex-shrink-0 ${
+                  theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-100'
+                }`}>
+                  <svg className="w-2.5 h-2.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+              )}
+              <span className={`truncate ${isCompleted ? 'line-through decoration-emerald-500/30' : ''}`}>{task.name}</span>
             </div>
-            {/* Hide date range on mobile to save space */}
+            {/* Date range - refined typography */}
             {!isMobile && (
-              <div className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+              <div className={`text-[10px] md:text-xs mt-0.5 font-medium tracking-wide ${
+                theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+              }`}>
                 {dateRange}
               </div>
             )}
           </div>
         </div>
 
-        {/* Subtasks */}
+        {/* Subtasks with smooth animation */}
         {hasChildren && isExpanded && task.children.map((child) => (
           <TaskNameComponent key={child.id} task={child} level={level + 1} />
         ))}
@@ -446,7 +491,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     );
   };
 
-  // Render task bars - using CSS hover for performance (no state re-renders)
+  // Render task bars - Modern design with smooth animations
   const TaskBarComponent = ({ task, rowIndex }) => {
     const { left, width } = getTaskPosition(task);
     const barStyle = getBarStyle(task);
@@ -790,7 +835,7 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatTasksList, TaskBarComponent]);
 
-  // Generate date headers
+  // Generate date headers - Modern refined design
   const DateHeaders = () => {
     const headers = [];
     
@@ -805,21 +850,25 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         headers.push(
           <div
             key={i}
-            className={`flex-shrink-0 flex flex-col items-center justify-center text-xs border-r transition-colors ${
+            className={`flex-shrink-0 flex flex-col items-center justify-center text-xs border-r transition-all duration-150 ${
               isToday 
-                ? 'bg-cyan-500/20 border-cyan-500/30' 
+                ? 'bg-gradient-to-b from-violet-500/20 to-indigo-500/10 border-violet-400/30' 
                 : isWeekend 
                   ? theme === 'dark'
-                    ? 'bg-slate-800/30 border-slate-700/30 text-slate-500'
-                    : 'bg-slate-200/30 border-slate-300/30 text-slate-400'
+                    ? 'bg-white/[0.02] border-white/[0.04] text-slate-500'
+                    : 'bg-slate-100/50 border-slate-200/30 text-slate-400'
                   : theme === 'dark'
-                    ? 'bg-slate-900/50 border-slate-700/30 text-slate-400'
-                    : 'bg-white/50 border-slate-200/30 text-slate-500'
+                    ? 'bg-transparent border-white/[0.04] text-slate-400'
+                    : 'bg-transparent border-slate-200/30 text-slate-500'
             }`}
             style={{ width: cellWidth, height: rowHeight }}
           >
-            <span className={`font-medium ${isToday ? 'text-cyan-400' : ''}`}>{dayName}</span>
-            <span className={`text-[10px] ${isToday ? 'text-cyan-300 font-bold' : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{date.getDate()}</span>
+            <span className={`font-medium tracking-wide ${isToday ? 'text-violet-400' : ''}`}>{dayName}</span>
+            <span className={`text-[10px] font-semibold ${
+              isToday 
+                ? 'text-violet-300 bg-violet-500/30 px-1.5 rounded-full' 
+                : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
+            }`}>{date.getDate()}</span>
           </div>
         );
       }
@@ -830,19 +879,25 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         const date = new Date(startDate);
         date.setDate(date.getDate() + i * 7);
         const weekNum = getWeekNumber(date);
+        const isCurrentWeek = (() => {
+          const today = new Date();
+          return getWeekNumber(today) === weekNum && date.getFullYear() === today.getFullYear();
+        })();
         
         headers.push(
           <div
             key={`week-${i}`}
             className={`flex-shrink-0 border-r flex flex-col items-center justify-center text-xs ${
-              theme === 'dark'
-                ? 'border-slate-700/30 bg-slate-900/50 text-slate-400'
-                : 'border-slate-200/30 bg-white/50 text-slate-500'
+              isCurrentWeek
+                ? 'bg-gradient-to-b from-violet-500/20 to-indigo-500/10 border-violet-400/30'
+                : theme === 'dark'
+                  ? 'border-white/[0.04] bg-transparent text-slate-400'
+                  : 'border-slate-200/30 bg-transparent text-slate-500'
             }`}
             style={{ width: cellWidth, height: rowHeight }}
           >
-            <span className="font-medium">W{weekNum}</span>
-            <span className={`text-[10px] ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+            <span className={`font-semibold tracking-wide ${isCurrentWeek ? 'text-violet-400' : ''}`}>W{weekNum}</span>
+            <span className={`text-[10px] ${isCurrentWeek ? 'text-violet-300' : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
               {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </span>
           </div>
@@ -868,23 +923,23 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             key={`month-${current.getFullYear()}-${current.getMonth()}`}
             className={`flex-shrink-0 border-r flex flex-col items-center justify-center text-xs ${
               isCurrentMonth 
-                ? 'bg-cyan-600 border-cyan-500' 
+                ? 'bg-gradient-to-b from-violet-500/30 to-indigo-500/20 border-violet-400/30' 
                 : theme === 'dark'
-                  ? 'bg-slate-900/50 border-slate-700/30'
-                  : 'bg-white/50 border-slate-200/30'
+                  ? 'bg-transparent border-white/[0.04]'
+                  : 'bg-transparent border-slate-200/30'
             }`}
             style={{ width: monthWidth, height: rowHeight }}
           >
-            <span className={`font-medium ${
+            <span className={`font-semibold tracking-wide ${
               isCurrentMonth 
-                ? 'text-white' 
+                ? 'text-violet-300' 
                 : theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
             }`}>
               {current.toLocaleDateString('en-US', { month: 'short' })}
             </span>
             <span className={`text-[10px] ${
               isCurrentMonth 
-                ? 'text-cyan-100' 
+                ? 'text-violet-400' 
                 : theme === 'dark' ? 'text-slate-500' : 'text-slate-400'
             }`}>
               {current.getFullYear()}
@@ -915,12 +970,12 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             key={`quarter-${current.getFullYear()}-Q${quarter}`}
             className={`flex-shrink-0 border-r flex flex-col items-center justify-center text-xs ${
               theme === 'dark'
-                ? 'border-slate-700/30 bg-slate-900/50 text-slate-400'
-                : 'border-slate-200/30 bg-white/50 text-slate-500'
+                ? 'border-white/[0.04] bg-transparent text-slate-400'
+                : 'border-slate-200/30 bg-transparent text-slate-500'
             }`}
             style={{ width: quarterWidth, height: rowHeight }}
           >
-            <span className="font-medium">Q{quarter}</span>
+            <span className="font-semibold tracking-wide">Q{quarter}</span>
             <span className={`text-[10px] ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
               {current.getFullYear()}
             </span>
@@ -940,14 +995,17 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                            (current.getFullYear() % 400 === 0);
         const daysInYear = isLeapYear ? 366 : 365;
         const yearWidth = daysInYear * pixelsPerDay;
+        const isCurrentYear = current.getFullYear() === new Date().getFullYear();
         
         headers.push(
           <div
             key={`year-${current.getFullYear()}`}
-            className={`flex-shrink-0 border-r flex items-center justify-center text-xs font-medium ${
-              theme === 'dark'
-                ? 'border-slate-700/30 bg-slate-900/50 text-slate-400'
-                : 'border-slate-200/30 bg-white/50 text-slate-500'
+            className={`flex-shrink-0 border-r flex items-center justify-center text-xs font-semibold tracking-wide ${
+              isCurrentYear
+                ? 'bg-gradient-to-b from-violet-500/20 to-indigo-500/10 border-violet-400/30 text-violet-400'
+                : theme === 'dark'
+                  ? 'border-white/[0.04] bg-transparent text-slate-400'
+                  : 'border-slate-200/30 bg-transparent text-slate-500'
             }`}
             style={{ width: yearWidth, height: rowHeight }}
           >
@@ -1042,20 +1100,21 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
 
         lines.push(
           <g key={`dep-${depId}-${task.id}`}>
-            {/* Line shadow for depth */}
+            {/* Line glow effect for depth */}
             <path
               d={path}
               fill="none"
-              stroke="rgba(0,0,0,0.3)"
-              strokeWidth="4"
+              stroke="url(#depLineGlow)"
+              strokeWidth="6"
               strokeLinecap="round"
               strokeLinejoin="round"
+              opacity="0.3"
             />
-            {/* Main connector line */}
+            {/* Main connector line with gradient */}
             <path
               d={path}
               fill="none"
-              stroke="#94a3b8"
+              stroke="url(#depLineGradient)"
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -1063,16 +1122,22 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             {/* Arrow head at target */}
             <polygon
               points={`${toX},${toY} ${toX - 8},${toY - 5} ${toX - 8},${toY + 5}`}
-              fill="#94a3b8"
+              fill="#8b5cf6"
             />
-            {/* Dot at source */}
+            {/* Dot at source with ring */}
             <circle 
               cx={fromX} 
               cy={fromY} 
-              r="4" 
-              fill="#94a3b8"
-              stroke="#1e293b"
-              strokeWidth="1"
+              r="5" 
+              fill="transparent"
+              stroke="#6366f1"
+              strokeWidth="2"
+            />
+            <circle 
+              cx={fromX} 
+              cy={fromY} 
+              r="2.5" 
+              fill="#6366f1"
             />
           </g>
         );
@@ -1093,10 +1158,10 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
     return daysFromStart * pixelsPerDay;
   };
 
-  // Grid lines component - renders lines matching the header boundaries
+  // Grid lines component - renders lines matching the header boundaries with modern subtle styling
   const GridLines = () => {
     const lines = [];
-    const gridLineClass = theme === 'dark' ? 'border-slate-700/20' : 'border-slate-300/30';
+    const gridLineClass = theme === 'dark' ? 'border-white/[0.03]' : 'border-slate-200/40';
     
     if (granularity === 'days') {
       for (let i = 0; i < displayDays; i++) {
@@ -1198,79 +1263,102 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
   return (
     <div 
       id="gantt-chart-container" 
-      className={`flex flex-col rounded-lg ${isExpandedView ? '' : 'h-full overflow-hidden'} ${
+      className={`flex flex-col rounded-2xl ${isExpandedView ? '' : 'h-full overflow-hidden'} ${
         theme === 'dark' 
-          ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800' 
-          : 'bg-gradient-to-br from-slate-100 via-white to-slate-50'
-      }`}
+          ? 'bg-gradient-to-br from-[#0c1222] via-[#111827] to-[#0f172a] border border-white/[0.06]' 
+          : 'bg-gradient-to-br from-slate-50 via-white to-slate-100/80 border border-slate-200/60'
+      } shadow-2xl`}
       style={isExpandedView ? { height: 'auto', minHeight: '100%' } : {}}
     >
-      {/* Header Controls - Always stays at full width, sticky when expanded */}
+      {/* Header Controls - Modern glassmorphic design */}
       <div 
-        className={`px-2 md:px-4 py-2 md:py-3 border-b backdrop-blur-sm flex-shrink-0 overflow-x-auto z-10 ${isExpandedView ? 'sticky top-0 left-0 right-0' : ''} ${
+        className={`px-3 md:px-5 py-2.5 md:py-3.5 border-b backdrop-blur-xl flex-shrink-0 overflow-x-auto z-10 ${isExpandedView ? 'sticky top-0 left-0 right-0' : ''} ${
           theme === 'dark' 
-            ? 'border-slate-700/50 bg-slate-800/95' 
-            : 'border-slate-200 bg-white/95'
+            ? 'border-white/[0.06] bg-slate-900/80' 
+            : 'border-slate-200/80 bg-white/90'
         }`}
         style={isExpandedView ? { position: 'sticky', top: 0, width: '100%', maxWidth: '100vw' } : {}}
       >
         <div className="flex items-center justify-between gap-2 md:gap-3 min-w-max">
           <div className="flex items-center gap-2 md:gap-3">
-            <span className={`text-xs md:text-sm font-medium whitespace-nowrap ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>
-              {flatTasksList.length} tasks
-            </span>
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${
+              theme === 'dark' 
+                ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20' 
+                : 'bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/50'
+            }`}>
+              <div className={`w-2 h-2 rounded-full animate-pulse ${
+                theme === 'dark' ? 'bg-indigo-400' : 'bg-indigo-500'
+              }`} />
+              <span className={`text-xs md:text-sm font-semibold whitespace-nowrap ${
+                theme === 'dark' ? 'text-indigo-300' : 'text-indigo-700'
+              }`}>
+                {flatTasksList.length} tasks
+              </span>
+            </div>
           </div>
 
-          {/* Granularity Selector */}
-          <div className={`flex items-center gap-0.5 md:gap-1 rounded-lg p-0.5 md:p-1 ${
-            theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-100'
+          {/* Granularity Selector - Modern pill design */}
+          <div className={`flex items-center gap-1 rounded-xl p-1 ${
+            theme === 'dark' 
+              ? 'bg-slate-800/60 border border-white/[0.06]' 
+              : 'bg-slate-100/80 border border-slate-200/60'
           }`}>
             {(isMobile ? ['D', 'W', 'M', 'Q', 'Y'] : ['Days', 'Weeks', 'Months', 'Quarters', 'Years']).map((label, i) => {
               const fullLabels = ['days', 'weeks', 'months', 'quarters', 'years'];
+              const isActive = granularity === fullLabels[i];
               return (
                 <button
                   key={label}
                   onClick={() => setGranularity(fullLabels[i])}
-                  className={`px-2 md:px-3 py-1 md:py-1.5 text-xs font-medium rounded-md transition-all ${
-                    granularity === fullLabels[i]
-                      ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/25'
+                  className={`relative px-2.5 md:px-4 py-1.5 md:py-2 text-xs font-semibold rounded-lg transition-all duration-300 ${
+                    isActive
+                      ? theme === 'dark'
+                        ? 'text-white'
+                        : 'text-white'
                       : theme === 'dark'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
-                        : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                        ? 'text-slate-400 hover:text-slate-200'
+                        : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  {label}
+                  {isActive && (
+                    <div className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-500 shadow-lg shadow-indigo-500/30" />
+                  )}
+                  <span className="relative z-10">{label}</span>
                 </button>
               );
             })}
           </div>
 
-          {/* Zoom Controls */}
-          <div className={`flex items-center gap-0.5 md:gap-1 rounded-lg p-0.5 md:p-1 ${
-            theme === 'dark' ? 'bg-slate-800/50' : 'bg-slate-100'
+          {/* Zoom Controls - Refined minimal design */}
+          <div className={`flex items-center gap-1 rounded-xl p-1 ${
+            theme === 'dark' 
+              ? 'bg-slate-800/60 border border-white/[0.06]' 
+              : 'bg-slate-100/80 border border-slate-200/60'
           }`}>
             <button
               onClick={handleZoomOut}
-              className={`p-1 md:p-1.5 rounded-md transition ${
+              className={`p-1.5 md:p-2 rounded-lg transition-all duration-200 active:scale-95 ${
                 theme === 'dark' 
-                  ? 'hover:bg-slate-700/50 text-slate-400 hover:text-slate-200' 
-                  : 'hover:bg-slate-200 text-slate-500 hover:text-slate-700'
+                  ? 'hover:bg-white/10 text-slate-400 hover:text-white' 
+                  : 'hover:bg-slate-200 text-slate-500 hover:text-slate-800'
               }`}
               title="Zoom Out"
             >
               <ZoomOut className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </button>
-            <span className={`text-xs font-medium min-w-[35px] md:min-w-[45px] text-center ${
-              theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+            <div className={`px-2 py-1 rounded-md min-w-[40px] md:min-w-[50px] text-center ${
+              theme === 'dark' 
+                ? 'bg-white/5 text-cyan-400 font-mono' 
+                : 'bg-slate-200/60 text-cyan-600 font-mono'
             }`}>
-              {Math.round(zoom * 100)}%
-            </span>
+              <span className="text-xs font-semibold">{Math.round(zoom * 100)}%</span>
+            </div>
             <button
               onClick={handleZoomIn}
-              className={`p-1 md:p-1.5 rounded-md transition ${
+              className={`p-1.5 md:p-2 rounded-lg transition-all duration-200 active:scale-95 ${
                 theme === 'dark' 
-                  ? 'hover:bg-slate-700/50 text-slate-400 hover:text-slate-200' 
-                  : 'hover:bg-slate-200 text-slate-500 hover:text-slate-700'
+                  ? 'hover:bg-white/10 text-slate-400 hover:text-white' 
+                  : 'hover:bg-slate-200 text-slate-500 hover:text-slate-800'
               }`}
               title="Zoom In"
             >
@@ -1299,13 +1387,13 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
             >
               Reset
             </button>
-            <div className={`w-px h-4 mx-0.5 md:mx-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-300'}`} />
+            <div className={`w-px h-5 mx-1.5 ${theme === 'dark' ? 'bg-white/10' : 'bg-slate-300/60'}`} />
             <button
               onClick={scrollToToday}
-              className={`p-1 md:p-1.5 rounded-md transition ${
+              className={`p-1.5 md:p-2 rounded-lg transition-all duration-200 active:scale-95 ${
                 theme === 'dark'
-                  ? 'hover:bg-slate-700/50 text-cyan-400 hover:text-cyan-300'
-                  : 'hover:bg-slate-200 text-cyan-500 hover:text-cyan-600'
+                  ? 'bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-500/20'
+                  : 'bg-cyan-50 hover:bg-cyan-100 text-cyan-600 hover:text-cyan-700 border border-cyan-200/60'
               }`}
               title="Go to Today"
             >
@@ -1329,11 +1417,32 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         </div>
       </div>
 
-      {/* Expanded View Banner */}
+      {/* Expanded View Banner - Modern notification style */}
       {isExpandedView && (
-        <div className="bg-green-500/20 border border-green-500/30 text-green-300 text-xs px-3 py-1.5 flex items-center justify-between">
-          <span>📸 Full Height Mode - Use browser's screenshot tool (F12 → Ctrl+Shift+P → "Capture full size screenshot")</span>
-          <button onClick={toggleExpandedView} className="text-green-400 hover:text-green-200 underline">Exit</button>
+        <div className={`flex items-center justify-between gap-4 px-4 py-2.5 ${
+          theme === 'dark'
+            ? 'bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-cyan-500/10 border-y border-emerald-500/20'
+            : 'bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 border-y border-emerald-200/60'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              theme === 'dark' ? 'bg-emerald-500/20' : 'bg-emerald-100'
+            }`}>
+              <span className="text-base">📸</span>
+            </div>
+            <div>
+              <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-emerald-300' : 'text-emerald-700'}`}>Full Height Mode Active</p>
+              <p className={`text-[10px] ${theme === 'dark' ? 'text-emerald-400/70' : 'text-emerald-600/70'}`}>F12 → Ctrl+Shift+P → "Capture full size screenshot"</p>
+            </div>
+          </div>
+          <button 
+            onClick={toggleExpandedView} 
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 active:scale-95 ${
+              theme === 'dark'
+                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30'
+                : 'bg-emerald-100 hover:bg-emerald-200 text-emerald-700 border border-emerald-300'
+            }`}
+          >Exit</button>
         </div>
       )}
 
@@ -1354,26 +1463,26 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
           </button>
         )}
         
-        {/* Task Names Sidebar */}
+        {/* Task Names Sidebar - Modern design */}
         {showTaskNames && (
         <div 
           className={`flex-shrink-0 border-r flex flex-col ${isExpandedView ? 'sticky left-0 z-10' : ''} ${
             theme === 'dark' 
-              ? 'border-slate-700/50 bg-slate-900/50' 
-              : 'border-slate-200 bg-slate-50/50'
+              ? 'border-white/[0.06] bg-slate-900/30' 
+              : 'border-slate-200/60 bg-slate-50/30'
           }`}
           style={{ width: taskNameWidth, height: isExpandedView ? 'auto' : undefined }}
         >
-          {/* Header */}
+          {/* Header - Refined styling */}
           <div
-            className={`flex items-center justify-between px-2 md:px-4 font-semibold text-sm border-b flex-shrink-0 ${
+            className={`flex items-center justify-between px-3 md:px-4 font-semibold text-xs md:text-sm border-b flex-shrink-0 tracking-wide ${
               theme === 'dark' 
-                ? 'text-slate-300 border-slate-700/50 bg-slate-800/30' 
-                : 'text-slate-700 border-slate-200 bg-slate-100/30'
+                ? 'text-slate-400 border-white/[0.06] bg-white/[0.02]' 
+                : 'text-slate-500 border-slate-200/60 bg-slate-100/20'
             }`}
             style={{ height: rowHeight }}
           >
-            <span className="truncate">{isMobile ? 'Tasks' : 'Task Name'}</span>
+            <span className="truncate uppercase">{isMobile ? 'Tasks' : 'Task Name'}</span>
             {isMobile && (
               <button
                 onClick={() => setShowTaskNames(false)}
@@ -1401,11 +1510,11 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
         {/* Timeline */}
         <div id="gantt-timeline-container" className={`flex-1 ${isExpandedView ? '' : 'overflow-x-auto overflow-y-auto'}`}>
           <div style={{ width: totalWidth, minHeight: totalHeight + rowHeight }}>
-            {/* Date Headers */}
-            <div className={`flex border-b sticky top-0 z-20 backdrop-blur-sm ${
+            {/* Date Headers - Modern frosted glass */}
+            <div className={`flex border-b sticky top-0 z-20 backdrop-blur-xl ${
               theme === 'dark' 
-                ? 'border-slate-700/50 bg-slate-900/95' 
-                : 'border-slate-200 bg-white/95'
+                ? 'border-white/[0.06] bg-slate-900/90' 
+                : 'border-slate-200/60 bg-white/90'
             }`}>
               <DateHeaders />
             </div>
@@ -1415,25 +1524,46 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
               {/* Grid Lines - rendered dynamically based on granularity */}
               <GridLines />
 
-              {/* Row backgrounds */}
+              {/* Row backgrounds - Subtle alternating with hover effect */}
               {flatTasksList.map((_, i) => (
                 <div
                   key={i}
-                  className={`absolute left-0 right-0 border-b ${
+                  className={`absolute left-0 right-0 border-b transition-colors duration-150 ${
                     theme === 'dark'
-                      ? `border-slate-700/20 ${i % 2 === 0 ? 'bg-slate-900/20' : 'bg-slate-800/10'}`
-                      : `border-slate-200/50 ${i % 2 === 0 ? 'bg-white/40' : 'bg-slate-50/40'}`
+                      ? `border-white/[0.03] ${i % 2 === 0 ? 'bg-transparent' : 'bg-white/[0.015]'} hover:bg-white/[0.04]`
+                      : `border-slate-200/40 ${i % 2 === 0 ? 'bg-transparent' : 'bg-slate-100/30'} hover:bg-slate-100/50`
                   }`}
                   style={{ top: i * rowHeight, height: rowHeight }}
                 />
               ))}
 
-              {/* Today Line */}
+              {/* Today Line - Enhanced visibility with glow effect */}
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-gradient-to-b from-cyan-400 via-cyan-500 to-cyan-400 z-30 shadow-lg shadow-cyan-500/50"
+                className="absolute top-0 bottom-0 z-30"
                 style={{ left: `${getTodayPosition()}px` }}
               >
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-cyan-400 rounded-full" />
+                {/* Glow effect */}
+                <div className={`absolute inset-y-0 -left-2 w-4 ${
+                  theme === 'dark' 
+                    ? 'bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent' 
+                    : 'bg-gradient-to-r from-transparent via-cyan-400/15 to-transparent'
+                }`} />
+                {/* Main line */}
+                <div className={`absolute inset-y-0 w-0.5 ${
+                  theme === 'dark'
+                    ? 'bg-gradient-to-b from-cyan-400 via-cyan-500 to-cyan-400'
+                    : 'bg-gradient-to-b from-cyan-500 via-cyan-600 to-cyan-500'
+                }`} style={{ boxShadow: theme === 'dark' ? '0 0 12px rgba(34, 211, 238, 0.5)' : '0 0 8px rgba(6, 182, 212, 0.4)' }} />
+                {/* Top indicator */}
+                <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-3 h-3 rounded-full ${
+                  theme === 'dark' ? 'bg-cyan-400' : 'bg-cyan-500'
+                }`} style={{ boxShadow: theme === 'dark' ? '0 0 8px rgba(34, 211, 238, 0.6)' : '0 0 6px rgba(6, 182, 212, 0.5)' }} />
+                {/* "Today" label */}
+                <div className={`absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider whitespace-nowrap ${
+                  theme === 'dark' 
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' 
+                    : 'bg-cyan-100 text-cyan-700 border border-cyan-300'
+                }`}>Today</div>
               </div>
 
               {/* Dependency Lines */}
@@ -1442,6 +1572,17 @@ const GanttChart = forwardRef(({ tasks, onTaskClick, onTaskEdit, onExpandedChang
                   className="absolute top-0 left-0 pointer-events-none overflow-visible" 
                   style={{ zIndex: 5, width: totalWidth, height: totalHeight }}
                 >
+                  {/* Gradient definitions for dependency lines */}
+                  <defs>
+                    <linearGradient id="depLineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="100%" stopColor="#8b5cf6" />
+                    </linearGradient>
+                    <linearGradient id="depLineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.4" />
+                    </linearGradient>
+                  </defs>
                   <DependencyLines />
                 </svg>
               )}

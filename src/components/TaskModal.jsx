@@ -215,7 +215,7 @@ export default function TaskModal({ task, onSave, onClose, allTasks = [], isSubt
           : 'bg-white border-slate-200'
       }`}>
         {/* Gradient accent */}
-        <div className="h-1 bg-gradient-to-r from-cyan-500 via-violet-500 to-cyan-500" />
+        <div className="h-1 bg-gradient-to-r from-violet-500 via-indigo-500 to-cyan-500" />
         
         {/* Header */}
         <div className={`flex items-center justify-between p-5 border-b ${
@@ -321,7 +321,7 @@ export default function TaskModal({ task, onSave, onClose, allTasks = [], isSubt
                 onClick={() => handleDeadlineModeToggle(false)}
                 className={`flex items-center justify-center gap-2 px-3 py-2.5 text-sm font-medium rounded-lg transition-all ${
                   !isDeadlineOnly
-                    ? 'bg-gradient-to-r from-cyan-500 to-violet-500 text-white shadow-lg'
+                    ? 'bg-gradient-to-r from-violet-500 to-indigo-500 text-white shadow-lg'
                     : theme === 'dark' 
                       ? 'text-slate-400 hover:text-slate-200 hover:bg-white/5' 
                       : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200'
@@ -486,7 +486,7 @@ export default function TaskModal({ task, onSave, onClose, allTasks = [], isSubt
                   className={`absolute h-2 rounded-full transition-all ${
                     formData.progress === 100 
                       ? 'bg-gradient-to-r from-emerald-500 to-green-500' 
-                      : 'bg-gradient-to-r from-cyan-500 to-violet-500'
+                      : 'bg-gradient-to-r from-violet-500 to-indigo-500'
                   }`}
                   style={{ width: `${formData.progress}%` }}
                 />
@@ -555,7 +555,7 @@ export default function TaskModal({ task, onSave, onClose, allTasks = [], isSubt
               type="submit"
               className="group relative flex-1 px-4 py-3 text-sm font-semibold rounded-xl transition-all overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-violet-500 transition-transform group-hover:scale-105" />
+              <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-500 transition-transform group-hover:scale-105" />
               <span className="relative flex items-center justify-center gap-2 text-white">
                 <Check className="w-4 h-4" />
                 Save Task
