@@ -1,3 +1,4 @@
+import { routeDependencyArrow, type RoutableBarNode } from '@/domain/dependencyRouting';
 import { flattenTasks, getTaskStatus, isTaskCompleted, isTaskDeadline } from '@/domain/taskTree';
 import {
   buildTimelineColumns,
@@ -319,12 +320,10 @@ export function renderGanttToCanvas(
     logicalHeight,
   );
 
-  // Pre-compute task bar geometry + index lookup for O(1) dependencies
-  const rowIndexMap = new Map<number, number>();
+  // Pre-compute task bar geometry for O(1) dependency routing
   const geomMap = new Map<number, { left: number; width: number }>();
 
   flatTasks.forEach((task, idx) => {
-    rowIndexMap.set(task.id, idx);
     const geom = calculateTaskBarGeometry(task, range.startDate, pixelsPerDay, 24);
     geomMap.set(task.id, geom);
 
@@ -413,44 +412,89 @@ export function renderGanttToCanvas(
     ctx.fill();
   }
 
-  // Draw dependency arrows if enabled
+  // Draw dependency arrows if enabled (using the same obstacle-aware router as the live SVG)
   if (options.showDependencyLines) {
     ctx.strokeStyle = palette.depLine;
     ctx.fillStyle = palette.depLine;
     ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    flatTasks.forEach((task, toIndex) => {
+    const routableNodes: RoutableBarNode[] = [];
+    const routableNodeMap = new Map<number, RoutableBarNode>();
+    flatTasks.forEach((task, idx) => {
+      const geom = geomMap.get(task.id);
+      if (!geom) return;
+      const left = startX + geom.left;
+      const right = left + Math.max(24, geom.width);
+      const node: RoutableBarNode = {
+        id: task.id,
+        rowIndex: idx,
+        left,
+        right,
+        labelRight:
+          options.taskLabelPosition === 'outside'
+            ? right + Math.min(180, task.name.length * 5.5 + 16)
+            : right,
+        centerY: rowStartY + idx * rowHeightPx + rowHeightPx / 2,
+      };
+      routableNodes.push(node);
+      routableNodeMap.set(task.id, node);
+    });
+
+    const sourceLaneCounts = new Map<number, number>();
+    const targetLaneCounts = new Map<number, number>();
+
+    flatTasks.forEach((task) => {
       if (!task.dependencies?.length) return;
-      const toGeom = geomMap.get(task.id);
-      if (!toGeom) return;
+      const target = routableNodeMap.get(task.id);
+      if (!target) return;
 
       task.dependencies.forEach((depId) => {
-        const fromIndex = rowIndexMap.get(depId);
-        const fromGeom = geomMap.get(depId);
-        if (fromIndex === undefined || !fromGeom) return;
+        const source = routableNodeMap.get(depId);
+        if (!source) return;
 
-        const fromX = startX + fromGeom.left + fromGeom.width;
-        const fromY = rowStartY + fromIndex * rowHeightPx + rowHeightPx / 2;
-        const toX = startX + toGeom.left;
-        const toY = rowStartY + toIndex * rowHeightPx + rowHeightPx / 2;
+        const sourceLaneIndex = sourceLaneCounts.get(depId) ?? 0;
+        sourceLaneCounts.set(depId, sourceLaneIndex + 1);
+        const targetLaneIndex = targetLaneCounts.get(task.id) ?? 0;
+        targetLaneCounts.set(task.id, targetLaneIndex + 1);
 
-        ctx.beginPath();
-        ctx.moveTo(fromX, fromY);
-        if (toX > fromX + 18) {
-          const midX = fromX + 12;
-          ctx.lineTo(midX, fromY);
-          ctx.lineTo(midX, toY);
-          ctx.lineTo(toX - 6, toY);
-        } else {
-          const midY = (fromY + toY) / 2;
-          ctx.lineTo(fromX + 8, fromY);
-          ctx.lineTo(fromX + 8, midY);
-          ctx.lineTo(toX - 10, midY);
-          ctx.lineTo(toX - 10, toY);
-          ctx.lineTo(toX - 6, toY);
+        const routed = routeDependencyArrow({
+          source,
+          target,
+          allNodes: routableNodes,
+          rowHeight: rowHeightPx,
+          rowOffsetY: rowStartY,
+          sourceLaneIndex,
+          targetLaneIndex,
+          cornerRadius: 5,
+          arrowTipInset: 6,
+        });
+
+        const pts = routed.points;
+        if (pts.length >= 2) {
+          ctx.beginPath();
+          ctx.moveTo(pts[0]!.x, pts[0]!.y);
+          for (let i = 1; i < pts.length - 1; i++) {
+            const prev = pts[i - 1]!;
+            const curr = pts[i]!;
+            const next = pts[i + 1]!;
+            const len1 = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+            const len2 = Math.hypot(next.x - curr.x, next.y - curr.y);
+            const r = Math.min(5, len1 / 2, len2 / 2);
+            if (r >= 0.5 && len1 > 0 && len2 > 0) {
+              ctx.arcTo(curr.x, curr.y, next.x, next.y, r);
+            } else {
+              ctx.lineTo(curr.x, curr.y);
+            }
+          }
+          const last = pts[pts.length - 1]!;
+          ctx.lineTo(last.x, last.y);
+          ctx.stroke();
         }
-        ctx.stroke();
 
+        const toX = target.left;
+        const toY = target.centerY;
         ctx.beginPath();
         ctx.moveTo(toX, toY);
         ctx.lineTo(toX - 7, toY - 3.5);

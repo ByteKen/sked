@@ -33,7 +33,7 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
       ref,
       () => ({
         show: (task, durationDays, anchorRect) => {
-          const placeBelow = anchorRect.top < 150;
+          const placeBelow = anchorRect.top < 240;
           const clampedX = Math.max(
             12,
             Math.min(window.innerWidth - 268, anchorRect.left),

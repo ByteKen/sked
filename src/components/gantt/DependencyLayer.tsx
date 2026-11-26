@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react';
+import { routeDependencyArrow, type RoutableBarNode } from '@/domain/dependencyRouting';
 import { isTaskDeadline } from '@/domain/taskTree';
 import type { TaskBarGeometry } from '@/domain/timeline';
 import type {
@@ -23,11 +24,9 @@ export interface DependencyLayerProps {
   totalHeight: number;
 }
 
-interface IndexedNode {
+interface IndexedNode extends RoutableBarNode {
   task: FlatTask;
-  left: number;
   width: number;
-  centerY: number;
 }
 
 export const DependencyLayer = memo(function DependencyLayer({
@@ -47,6 +46,7 @@ export const DependencyLayer = memo(function DependencyLayer({
 
   const { depPaths, subtaskPaths } = useMemo(() => {
     const nodeMap = new Map<number, IndexedNode>();
+    const allNodes: IndexedNode[] = [];
 
     visibleTasks.forEach((task, rowIndex) => {
       const geom = barGeometries.get(task.id);
@@ -56,13 +56,35 @@ export const DependencyLayer = memo(function DependencyLayer({
       const centerY =
         rowIndex * rowHeight +
         getBarCenterY(rowHeight, barHeightPx, labelPos === 'top', showTaskDescriptions);
+      const right = geom.left + geom.width;
+      const deadline = isTaskDeadline(task);
+      const progressSuffixLen = task.progress > 0 && !deadline ? String(task.progress).length + 3 : 0;
+      const outsideLabelWidth =
+        labelPos === 'outside'
+          ? 8 + Math.min(210, (task.name.length + progressSuffixLen) * 6.8 + 10)
+          : 0;
+      const topLabelRight =
+        labelPos === 'top'
+          ? geom.left + Math.min(240, (task.name.length + progressSuffixLen) * 6.5 + 10)
+          : right;
+      const descRight =
+        showTaskDescriptions && task.description
+          ? geom.left + Math.min(Math.max(geom.width, 280), task.description.length * 6.2 + 12)
+          : right;
+      const labelRight = Math.max(right + outsideLabelWidth, topLabelRight, descRight);
 
-      nodeMap.set(task.id, {
+      const node: IndexedNode = {
+        id: task.id,
+        rowIndex,
         task,
         left: geom.left,
+        right,
+        labelRight,
         width: geom.width,
         centerY,
-      });
+      };
+      nodeMap.set(task.id, node);
+      allNodes.push(node);
     });
 
     const computedDeps: Array<{
@@ -75,6 +97,9 @@ export const DependencyLayer = memo(function DependencyLayer({
     }> = [];
 
     if (showDependencyLines) {
+      const sourceLaneCounts = new Map<number, number>();
+      const targetLaneCounts = new Map<number, number>();
+
       visibleTasks.forEach((task) => {
         if (!task.dependencies?.length) return;
         const target = nodeMap.get(task.id);
@@ -84,28 +109,31 @@ export const DependencyLayer = memo(function DependencyLayer({
           const source = nodeMap.get(depId);
           if (!source) return;
 
-          const fromX = source.left + source.width;
-          const fromY = source.centerY;
-          const toX = target.left;
-          const toY = target.centerY;
-          const goingDown = toY > fromY;
-          const vDist = Math.abs(toY - fromY);
+          const sourceLaneIndex = sourceLaneCounts.get(depId) ?? 0;
+          sourceLaneCounts.set(depId, sourceLaneIndex + 1);
 
-          let d: string;
-          if (toX > fromX + 26) {
-            const midX = fromX + 14;
-            const r = Math.min(8, vDist / 2);
-            if (goingDown) {
-              d = `M ${fromX} ${fromY} H ${midX} Q ${midX + r} ${fromY} ${midX + r} ${fromY + r} V ${toY - r} Q ${midX + r} ${toY} ${midX + r * 2} ${toY} H ${toX - 5}`;
-            } else {
-              d = `M ${fromX} ${fromY} H ${midX} Q ${midX + r} ${fromY} ${midX + r} ${fromY - r} V ${toY + r} Q ${midX + r} ${toY} ${midX + r * 2} ${toY} H ${toX - 5}`;
-            }
-          } else {
-            const midY = (fromY + toY) / 2;
-            d = `M ${fromX} ${fromY} H ${fromX + 10} V ${midY} H ${toX - 12} V ${toY} H ${toX - 5}`;
-          }
+          const targetLaneIndex = targetLaneCounts.get(task.id) ?? 0;
+          targetLaneCounts.set(task.id, targetLaneIndex + 1);
 
-          computedDeps.push({ key: `dep-${depId}-${task.id}`, d, fromX, fromY, toX, toY });
+          const routed = routeDependencyArrow({
+            source,
+            target,
+            allNodes,
+            rowHeight,
+            sourceLaneIndex,
+            targetLaneIndex,
+            cornerRadius: 6,
+            arrowTipInset: 5,
+          });
+
+          computedDeps.push({
+            key: `dep-${depId}-${task.id}`,
+            d: routed.svgPath,
+            fromX: source.right,
+            fromY: source.centerY,
+            toX: target.left,
+            toY: target.centerY,
+          });
         });
       });
     }
