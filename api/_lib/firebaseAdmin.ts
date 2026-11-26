@@ -1,8 +1,11 @@
 import type { VercelRequest } from '@vercel/node';
 import { cert, getApps, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import type { WorkspaceTasksBundle } from '../../src/domain/reminders.js';
+import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import {
+  recalculateBotTreeProgress,
+  type TelegramWorkspaceBundle,
+} from '../../src/domain/telegramBot.js';
 import type { Task } from '../../src/types/task.js';
 
 export interface VerifiedUser {
@@ -109,23 +112,85 @@ export async function verifyFirebaseBearerToken(req: VercelRequest): Promise<Ver
 
 export function extractUserWorkspaces(
   userData: Record<string, unknown> | undefined,
-): WorkspaceTasksBundle[] {
+): TelegramWorkspaceBundle[] {
   if (!userData) return [];
   const rawWorkspaces = userData.workspaces as
-    | Record<string, { id?: string; title?: string }>
+    | Record<
+        string,
+        { id?: string; title?: string; isShared?: boolean; shareId?: string | null }
+      >
     | undefined;
   if (!rawWorkspaces || typeof rawWorkspaces !== 'object') return [];
 
-  const bundles: WorkspaceTasksBundle[] = [];
+  const bundles: TelegramWorkspaceBundle[] = [];
   for (const [key, ws] of Object.entries(rawWorkspaces)) {
     if (!ws || typeof ws !== 'object') continue;
     const workspaceId = ws.id || key;
     const workspaceTitle = ws.title || 'Untitled Workspace';
     const rawTasks = userData[`tasks_${workspaceId}`];
     const tasks = Array.isArray(rawTasks) ? (rawTasks as Task[]) : [];
-    bundles.push({ workspaceId, workspaceTitle, tasks });
+    bundles.push({
+      workspaceId,
+      workspaceTitle,
+      tasks,
+      isShared: Boolean(ws.isShared),
+      shareId: typeof ws.shareId === 'string' ? ws.shareId : null,
+    });
   }
   return bundles;
+}
+
+/**
+ * Persists sanitized task mutations initiated from Telegram back to `users/{uid}`
+ * and mirrors them immediately to `sharedCharts/{shareId}` if the workspace is publicly shared.
+ */
+export async function saveWorkspaceTasksFromBot(
+  db: Firestore,
+  uid: string,
+  workspace: TelegramWorkspaceBundle,
+  nextTasks: readonly Task[],
+): Promise<Task[]> {
+  const cleanTasks = recalculateBotTreeProgress(nextTasks);
+  const nowISO = new Date().toISOString();
+
+  const writes: Promise<unknown>[] = [
+    db
+      .collection('users')
+      .doc(uid)
+      .set(
+        {
+          [`tasks_${workspace.workspaceId}`]: cleanTasks,
+          workspaces: {
+            [workspace.workspaceId]: {
+              updatedAt: nowISO,
+            },
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      ),
+  ];
+
+  if (workspace.isShared && workspace.shareId) {
+    writes.push(
+      db
+        .collection('sharedCharts')
+        .doc(workspace.shareId)
+        .set(
+          {
+            tasks: cleanTasks,
+            updatedAt: nowISO,
+          },
+          { merge: true },
+        )
+        .catch((err) => {
+          console.error(`Failed syncing shared chart ${workspace.shareId} from Telegram:`, err);
+        }),
+    );
+  }
+
+  await Promise.all(writes);
+  return cleanTasks;
 }
 
 export function getAppBaseUrl(req?: VercelRequest): string {

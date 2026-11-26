@@ -226,9 +226,11 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
                   Upcoming Deadline Reminders via Telegram
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                  Get exact timezone-aware Telegram alerts 5 days, 3 days, 1 day before, or on the
-                  day tasks are due—plus run <code className="font-mono">/upcoming</code> anytime in
-                  chat.
+                  Get timezone-aware deadline reminders and manage tasks right from Telegram with{' '}
+                  <code className="font-mono">/tasks</code>,{' '}
+                  <code className="font-mono">/today</code>,{' '}
+                  <code className="font-mono">/upcoming</code>, and{' '}
+                  <code className="font-mono">/summary</code>.
                 </p>
               </div>
             </div>
@@ -401,6 +403,16 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
               onChange={(next) => void handleUpdate({ includeOverdue: next })}
               ariaLabel="Toggle overdue reminder alert"
             />
+          </div>
+
+          {/* Interactive Bot Commands Hint */}
+          <div className="p-3 rounded-lg bg-white/80 dark:bg-surface-dark/60 border border-slate-200/70 dark:border-white/[0.06] text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+            <span className="font-semibold text-slate-800 dark:text-slate-200">Bot commands:</span>{' '}
+            <code className="font-mono text-brand-600 dark:text-brand-400">/tasks</code> browse &amp;
+            mark done · <code className="font-mono text-brand-600 dark:text-brand-400">/today</code>{' '}
+            urgent items ·{' '}
+            <code className="font-mono text-brand-600 dark:text-brand-400">/upcoming</code> next 14d ·{' '}
+            <code className="font-mono text-brand-600 dark:text-brand-400">/summary</code> overview
           </div>
 
           {/* Actions Row */}

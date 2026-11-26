@@ -7,13 +7,14 @@ import {
   isValidTimeZone,
   normalizeReminderOffsets,
 } from '../../src/domain/reminders.js';
+import { BOT_COMMANDS } from '../../src/domain/telegramBot.js';
 import {
   getAdminDb,
   getAppBaseUrl,
   verifyFirebaseBearerToken,
   type StoredTelegramSubscription,
 } from '../_lib/firebaseAdmin.js';
-import { sendTelegramMessage } from '../_lib/telegramClient.js';
+import { sendTelegramMessage, setTelegramBotCommands } from '../_lib/telegramClient.js';
 
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 
@@ -149,18 +150,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const baseUrl = getAppBaseUrl(req);
         const linkLine = baseUrl ? `\n<a href="${baseUrl}">Open Gantt</a>` : '';
 
+        // Refresh Telegram slash-command menu for already-connected users
+        void setTelegramBotCommands(BOT_COMMANDS);
+
         const result = await sendTelegramMessage(
           sub.chatId,
           [
             '<b>✅ Gantt Test Notification</b>',
             '',
-            `Hi ${escapeTelegramHtml(sub.firstName || verifiedUser.name)}! Your Telegram deadline alerts are active.`,
+            `Hi ${escapeTelegramHtml(sub.firstName || verifiedUser.name)}! Your Telegram bot and deadline alerts are active.`,
             `• Schedule: <b>${escapeTelegramHtml(offsetsLabel)}</b>${sub.includeOverdue ? ' + Overdue' : ''}`,
             `• Timezone: <code>${escapeTelegramHtml(sub.timezone)}</code>`,
             linkLine,
           ]
             .filter(Boolean)
             .join('\n'),
+          {
+            inline_keyboard: [
+              [
+                { text: '📋 Browse Tasks', callback_data: 'wl' },
+                { text: '📅 Today', callback_data: 'to' },
+                { text: '📊 Summary', callback_data: 'sm' },
+              ],
+            ],
+          },
         );
 
         if (!result.ok) {

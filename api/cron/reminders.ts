@@ -6,6 +6,7 @@ import {
   getLocalDatePartsInTimezone,
   pruneSentReminders,
 } from '../../src/domain/reminders.js';
+import { buildReminderAlertReplyMarkup } from '../../src/domain/telegramBot.js';
 import {
   extractUserWorkspaces,
   getAdminDb,
@@ -90,7 +91,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const message = formatTelegramReminderMessage(dueItems, baseUrl);
-      const sendResult = await sendTelegramMessage(sub.chatId, message);
+      const replyMarkup = buildReminderAlertReplyMarkup(dueItems, baseUrl);
+      const sendResult = await sendTelegramMessage(sub.chatId, message, replyMarkup);
 
       if (sendResult.ok) {
         notified += 1;

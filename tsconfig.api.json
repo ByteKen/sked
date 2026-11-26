@@ -8,5 +8,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true
   },
-  "include": ["api/**/*.ts", "src/domain/reminders.ts", "src/types/task.ts"]
+  "include": ["api/**/*.ts", "src/domain/reminders.ts", "src/domain/telegramBot.ts", "src/types/task.ts"]
 }
