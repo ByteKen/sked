@@ -1,3 +1,9 @@
+<div align="center">
+  <img src="./assets/gantt-logo.png" alt="Gantt logo" width="96" />
+  <h1>Gantt App</h1>
+</div>
+
+
 <p align="center">
   <img src="./assets/social-preview.png" alt="Gantt - Plan. Organize. Track Progress." width="100%" />
 </p>
@@ -13,10 +19,6 @@
   <img src="https://img.shields.io/badge/version-v2.0.0-3b6bff?style=flat-square" alt="Version v2.0.0" />
   <img src="https://img.shields.io/badge/license-Apache%202.0-10b981?style=flat-square" alt="Apache 2.0 License" />
   <img src="https://img.shields.io/badge/stack-React%20%C2%B7%20TypeScript%20%C2%B7%20Firebase-0f172a?style=flat-square" alt="React TypeScript Firebase" />
-</p>
-
-<p align="center">
-  <strong>Leave a star if you find this project helpful!</strong>
 </p>
 
 ## About
@@ -40,17 +42,73 @@ Gantt is a browser-based project timeline app for planning schedules, tracking s
 
 ## Get started
 
+### Prerequisites
+
+- **Node.js 20+** and **npm**
+- A free [Firebase](https://console.firebase.google.com) project
+
+### 1. Clone and install
+
 ```bash
+git clone https://github.com/ByteKen/ganttapp.git
+cd ganttapp
 npm install
+```
+
+### 2. Set up Firebase
+
+1. Open [Firebase Console](https://console.firebase.google.com), create a project, and register a **Web** app.
+2. Enable **Authentication -> Sign-in method -> Google**.
+3. Create a **Cloud Firestore** database and publish the security rules from [`firestore.rules`](./firestore.rules).
+4. Confirm `localhost` is listed under **Authentication -> Settings -> Authorized domains**.
+
+### 3. Add environment variables
+
+Copy [`.env.example`](./.env.example) to `.env.local`:
+
+```bash
 cp .env.example .env.local
+```
+
+> PowerShell on Windows: `Copy-Item .env.example .env.local`
+
+Paste your Firebase Web app values into the six `VITE_FIREBASE_*` fields:
+
+```env
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+### 4. Start the dev server
+
+```bash
 npm run dev
 ```
 
-Fill in your Firebase web config in `.env.local` and publish [`firestore.rules`](./firestore.rules) in Firebase Console. For Vercel deployment and optional Telegram alerts, configure the server environment variables listed in [`.env.example`](./.env.example).
+Open `http://localhost:5173` in your browser and sign in with Google.
 
-## Goal
+<details>
+<summary>Optional: Running Telegram alerts & serverless API routes locally</summary>
 
-This is a personal project built to keep Gantt scheduling fast and uncluttered. If it does not cover every workflow, other project tools may be a better fit, though bug reports and suggestions are always welcome in [GitHub Issues](https://github.com/ByteKen/ganttapp/issues).
+1. Create a bot via [@BotFather](https://t.me/BotFather) and generate a Firebase Service Account key under **Project Settings -> Service accounts**.
+2. Fill in the server-only variables in `.env.local` (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`, `FIREBASE_SERVICE_ACCOUNT_JSON`, and `APP_BASE_URL`). Never prefix these with `VITE_`.
+3. Run `npx vercel dev` instead of `npm run dev` to serve both the frontend and `/api/*` endpoints locally.
+4. On Vercel production, register your bot webhook once with `/api/telegram/webhook` using your `TELEGRAM_WEBHOOK_SECRET`.
+
+</details>
+
+### Useful scripts
+
+```bash
+npm run typecheck  # TypeScript check across app and API
+npm run lint       # ESLint check
+npm run test       # Run Vitest suite
+npm run build      # Production build
+```
 
 ## License
 
