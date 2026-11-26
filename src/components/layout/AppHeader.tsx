@@ -1,9 +1,10 @@
 import { useState, type RefObject } from 'react';
-import { List, MagnifyingGlass, SignOut, X } from '@phosphor-icons/react';
+import { MagnifyingGlass, SignOut, X } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector';
 import type { AuthUser } from '@/types';
+import { ProfileMenu } from './ProfileMenu';
 import { ThemeToggle } from './ThemeToggle';
 import { UserProfilePill } from './UserProfilePill';
 
@@ -14,8 +15,8 @@ export interface AppHeaderProps {
   onSearchChange: (val: string) => void;
   onGoHome: () => void;
   onOpenSettings: () => void;
+  onOpenImport: () => void;
   onRequestLogout: () => void;
-  onOpenMobileMenu: () => void;
 }
 
 export function AppHeader({
@@ -25,31 +26,22 @@ export function AppHeader({
   onSearchChange,
   onGoHome,
   onOpenSettings,
+  onOpenImport,
   onRequestLogout,
-  onOpenMobileMenu,
 }: AppHeaderProps) {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-white/[0.08] bg-white/90 dark:bg-[#090B10]/90 backdrop-blur-md">
-      <div className="h-16 sm:h-[68px] px-4 sm:px-6 flex items-center justify-between gap-3">
-        {/* Left: Mobile menu + Custom Logo + Workspace Switcher */}
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            type="button"
-            onClick={onOpenMobileMenu}
-            aria-label="Open menu"
-            className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08] cursor-pointer"
-          >
-            <List className="w-5 h-5" weight="bold" />
-          </button>
-
+      <div className="h-16 sm:h-[68px] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
+        {/* Left: Brand Logo + Direct Workspace Switcher */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={onGoHome}
             title="All Workspaces"
             aria-label="Go to all workspaces"
-            className="flex items-center gap-3 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl pr-1"
+            className="flex items-center gap-2.5 sm:gap-3 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl shrink-0"
           >
             <BrandLogo size="md" className="group-hover:scale-[1.04] transition-transform" />
             <span className="hidden sm:inline font-mono text-sm font-bold uppercase tracking-[0.2em] text-slate-900 dark:text-slate-100">
@@ -57,9 +49,9 @@ export function AppHeader({
             </span>
           </button>
 
-          <span className="hidden md:inline-block h-6 w-px bg-slate-200 dark:bg-white/[0.1]" />
+          <span className="h-5 sm:h-6 w-px bg-slate-200 dark:bg-white/[0.1] shrink-0" />
 
-          <div className="hidden md:block">
+          <div className="min-w-0">
             <WorkspaceSelector />
           </div>
         </div>
@@ -93,16 +85,27 @@ export function AppHeader({
           </div>
         </div>
 
-        {/* Right: Clean Theme + User Profile Pill (opens Settings & Account) + Sign Out */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Right: Search Toggle + Mobile Profile Menu / Desktop Theme + Profile Pill + Sign Out */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <button
             type="button"
             onClick={() => setMobileSearchOpen((v) => !v)}
             aria-label="Toggle task search"
-            className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08] cursor-pointer"
+            className="lg:hidden inline-flex items-center justify-center h-9 w-9 sm:h-10 sm:w-10 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08] cursor-pointer"
           >
             <MagnifyingGlass className="w-[18px] h-[18px]" weight="duotone" />
           </button>
+
+          {user && (
+            <ProfileMenu
+              user={user}
+              onGoHome={onGoHome}
+              onOpenSettings={onOpenSettings}
+              onOpenImport={onOpenImport}
+              onRequestLogout={onRequestLogout}
+              className="md:hidden"
+            />
+          )}
 
           <ThemeToggle className="hidden md:inline-flex" />
 

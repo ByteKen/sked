@@ -4,7 +4,7 @@ import { MagnifyingGlassMinus, Plus, UploadSimple } from '@phosphor-icons/react'
 import { AnimatePresence } from 'framer-motion';
 import { GanttWorkspace, type GanttWorkspaceHandle } from '@/components/gantt/GanttWorkspace';
 import { AppHeader } from '@/components/layout/AppHeader';
-import { MobileBottomBar, MobileDrawer } from '@/components/layout/MobileNav';
+import { MobileBottomBar } from '@/components/layout/MobileNav';
 import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { ImportModal } from '@/components/modals/ImportModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
@@ -60,7 +60,6 @@ export function WorkspacePage() {
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
   const [isChartExpanded, setIsChartExpanded] = useState(false);
   const [mobileView, setMobileView] = useState<'chart' | 'list'>('chart');
-  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   // Modal states
   const [taskModalOpen, setTaskModalOpen] = useState(false);
@@ -235,8 +234,8 @@ export function WorkspacePage() {
           onSearchChange={setSearchTerm}
           onGoHome={() => navigate('/')}
           onOpenSettings={() => setSettingsModalOpen(true)}
+          onOpenImport={() => setImportModalOpen(true)}
           onRequestLogout={() => setLogoutConfirmOpen(true)}
-          onOpenMobileMenu={() => setMobileDrawerOpen(true)}
         />
       )}
 
@@ -334,18 +333,7 @@ export function WorkspacePage() {
         )}
       </AnimatePresence>
 
-      {/* Mobile Navigation */}
-      <MobileDrawer
-        isOpen={mobileDrawerOpen}
-        user={user}
-        onClose={() => setMobileDrawerOpen(false)}
-        onGoHome={() => navigate('/')}
-        onOpenShare={() => setShareModalOpen(true)}
-        onOpenImport={() => setImportModalOpen(true)}
-        onOpenSettings={() => setSettingsModalOpen(true)}
-        onRequestLogout={() => setLogoutConfirmOpen(true)}
-      />
-
+      {/* Mobile Bottom Navigation */}
       {!isChartExpanded && (
         <MobileBottomBar
           workspace={currentWorkspace}

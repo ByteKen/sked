@@ -98,7 +98,7 @@ export function WorkspaceSelector() {
         onClick={() => setIsOpen((v) => !v)}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
-        className="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-200/90 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.08] text-slate-900 dark:text-slate-100 shadow-surface-sm transition-colors cursor-pointer max-w-[230px]"
+        className="flex items-center gap-1.5 sm:gap-2 h-9 px-2.5 sm:px-3 rounded-lg border border-slate-200/90 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] hover:bg-slate-50 dark:hover:bg-white/[0.08] text-slate-900 dark:text-slate-100 shadow-surface-sm transition-colors cursor-pointer max-w-[155px] sm:max-w-[230px]"
       >
         <FolderSimple className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" weight="duotone" />
         <span className="text-[13px] font-semibold truncate">
@@ -130,7 +130,7 @@ export function WorkspaceSelector() {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="absolute left-0 top-full mt-2 z-50 w-72 rounded-xl border border-slate-200/90 dark:border-white/[0.12] bg-white dark:bg-surface-elevated shadow-surface-lg dark:shadow-dark-lg overflow-hidden"
+              className="absolute left-0 top-full mt-2 z-50 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-slate-200/90 dark:border-white/[0.12] bg-white dark:bg-surface-elevated shadow-surface-lg dark:shadow-dark-lg overflow-hidden"
             >
               <div className="px-3.5 py-2.5 border-b border-slate-200/80 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.02]">
                 <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">Workspaces</p>
@@ -249,7 +249,7 @@ export function WorkspaceSelector() {
                             )}
                           </button>
 
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <button
                               type="button"
                               aria-label={`Rename ${ws.title}`}
