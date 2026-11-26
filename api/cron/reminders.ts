@@ -45,7 +45,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const now = new Date();
   const nowISO = now.toISOString();
   const baseUrl = getAppBaseUrl(req);
-  const db = getAdminDb();
 
   let checked = 0;
   let notified = 0;
@@ -55,6 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let failedSends = 0;
 
   try {
+    const db = getAdminDb();
     const subsSnap = await db
       .collection('telegramSubscriptions')
       .where('enabled', '==', true)

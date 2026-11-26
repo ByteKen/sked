@@ -70,10 +70,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const chatIdStr = String(chatId);
   const username = update.message?.from?.username ?? null;
   const firstName = update.message?.from?.first_name ?? null;
-  const db = getAdminDb();
   const baseUrl = getAppBaseUrl(req);
 
   try {
+    const db = getAdminDb();
     // 1. Deep-link connection: /start <token>
     if (rawText.startsWith('/start')) {
       const parts = rawText.split(/\s+/);

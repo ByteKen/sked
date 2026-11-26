@@ -27,17 +27,27 @@ export interface StoredTelegramSubscription {
 }
 
 function parseServiceAccount(): ServiceAccount {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
+  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) {
     throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON environment variable.');
   }
 
+  // Strip accidental surrounding single quotes if pasted with shell quotes
+  if (raw.startsWith("'") && raw.endsWith("'") && raw.length > 2) {
+    raw = raw.slice(1, -1).trim();
+  }
+
   let jsonText = raw;
-  if (!raw.startsWith('{')) {
+  if (!raw.startsWith('{') && !raw.startsWith('"')) {
     jsonText = Buffer.from(raw, 'base64').toString('utf8');
   }
 
-  const parsed = JSON.parse(jsonText) as ServiceAccount & {
+  let parsedUnknown: unknown = JSON.parse(jsonText);
+  if (typeof parsedUnknown === 'string') {
+    parsedUnknown = JSON.parse(parsedUnknown);
+  }
+
+  const parsed = (parsedUnknown ?? {}) as ServiceAccount & {
     project_id?: string;
     client_email?: string;
     private_key?: string;
@@ -84,8 +94,9 @@ export async function verifyFirebaseBearerToken(req: VercelRequest): Promise<Ver
   const token = header.slice('Bearer '.length).trim();
   if (!token) return null;
 
+  const adminAuth = getAdminAuth();
   try {
-    const decoded = await getAdminAuth().verifyIdToken(token);
+    const decoded = await adminAuth.verifyIdToken(token);
     return {
       uid: decoded.uid,
       email: decoded.email ?? '',

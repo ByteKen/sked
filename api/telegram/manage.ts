@@ -37,17 +37,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const verifiedUser = await verifyFirebaseBearerToken(req);
-  if (!verifiedUser) {
-    return res.status(401).json({ error: 'Unauthorized. Please sign in again.' });
-  }
-
-  const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as ManageBody;
-  const db = getAdminDb();
-  const subRef = db.collection('telegramSubscriptions').doc(verifiedUser.uid);
-  const userRef = db.collection('users').doc(verifiedUser.uid);
-
   try {
+    const verifiedUser = await verifyFirebaseBearerToken(req);
+    if (!verifiedUser) {
+      return res.status(401).json({ error: 'Unauthorized. Please sign in again.' });
+    }
+
+    const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as ManageBody;
+    const db = getAdminDb();
+    const subRef = db.collection('telegramSubscriptions').doc(verifiedUser.uid);
+    const userRef = db.collection('users').doc(verifiedUser.uid);
+
     switch (body.action) {
       case 'create-link': {
         const botUsername = process.env.TELEGRAM_BOT_USERNAME?.trim().replace(/^@/, '');
