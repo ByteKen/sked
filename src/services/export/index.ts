@@ -42,8 +42,8 @@ export async function exportGanttChart(
 
   try {
     switch (format) {
-      case 'pdf':
-        await exportTasksToPDF(tasks, filename, {
+      case 'pdf': {
+        const pdfResult = await exportTasksToPDF(tasks, filename, {
           workspaceTitle: options.workspaceTitle,
           theme: options.theme,
           useRoundedSubtasks: options.useRoundedSubtasks,
@@ -52,9 +52,17 @@ export async function exportGanttChart(
           taskLabelPosition: options.taskLabelPosition,
           granularity: options.granularity,
         });
-        break;
-      case 'png':
-        await exportTasksToPNG(tasks, filename, {
+        return {
+          ok: true,
+          filename:
+            pdfResult.pageCount > 1
+              ? `${filename} (${pdfResult.pageCount} pages)`
+              : filename,
+        };
+      }
+      case 'png': {
+        const pngResult = await exportTasksToPNG(tasks, filename, {
+          workspaceTitle: options.workspaceTitle,
           theme: options.theme,
           useRoundedSubtasks: options.useRoundedSubtasks,
           showDependencyLines: options.showDependencyLinesOnExport,
@@ -62,7 +70,14 @@ export async function exportGanttChart(
           taskLabelPosition: options.taskLabelPosition,
           granularity: options.granularity,
         });
-        break;
+        return {
+          ok: true,
+          filename:
+            pngResult.pageCount > 1
+              ? `${pngResult.pageCount} PNG images (${pngResult.filenames[0]} …)`
+              : filename,
+        };
+      }
       case 'csv':
         exportTasksToCSV(tasks, filename, options.workspaceTitle);
         break;

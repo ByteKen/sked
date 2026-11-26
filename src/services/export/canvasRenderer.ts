@@ -1,4 +1,5 @@
 import { routeDependencyArrow, type RoutableBarNode } from '@/domain/dependencyRouting';
+import { buildExportPagePlan } from '@/domain/exportPagination';
 import { flattenTasks, getTaskStatus, isTaskCompleted, isTaskDeadline } from '@/domain/taskTree';
 import {
   buildTimelineColumns,
@@ -21,12 +22,15 @@ import type {
 } from '@/types';
 
 export interface CanvasRenderOptions {
+  workspaceTitle?: string | null;
   theme: ThemeMode;
   useRoundedSubtasks: boolean;
   showDependencyLines: boolean;
   barHeight: BarHeightMode;
   taskLabelPosition: TaskLabelPosition;
   granularity?: TimelineGranularity;
+  /** When true, paints a subtle metadata + page-number footer onto each canvas (used for PNG). */
+  includeCanvasFooter?: boolean;
 }
 
 interface Palette {
@@ -58,9 +62,9 @@ const PALETTES: Record<ThemeMode, Palette> = {
     textMuted: '#64748b',
     todayLine: '#0284c7',
     todayBg: 'rgba(14, 165, 233, 0.12)',
-    depLine: '#6366f1',
+    depLine: '#3b6bff',
     barNotStarted: ['#94a3b8', '#64748b'],
-    barWorking: ['#f59e0b', '#d97706'],
+    barWorking: ['#3b6bff', '#2a55eb'],
     barComplete: ['#10b981', '#059669'],
   },
   dark: {
@@ -74,9 +78,9 @@ const PALETTES: Record<ThemeMode, Palette> = {
     textMuted: '#94a3b8',
     todayLine: '#38bdf8',
     todayBg: 'rgba(56, 189, 248, 0.14)',
-    depLine: '#818cf8',
+    depLine: '#648eff',
     barNotStarted: ['#64748b', '#475569'],
-    barWorking: ['#fbbf24', '#f59e0b'],
+    barWorking: ['#648eff', '#3b6bff'],
     barComplete: ['#34d399', '#10b981'],
   },
 };
@@ -87,6 +91,8 @@ export interface RenderedGanttCanvas {
   logicalHeight: number;
   taskCount: number;
   granularity: TimelineGranularity;
+  pageNumber: number;
+  totalPages: number;
 }
 
 function truncateText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
@@ -147,11 +153,12 @@ function drawHeader(
   ctx: CanvasRenderingContext2D,
   palette: Palette,
   columns: readonly TimelineColumn[],
+  colOffsetX: number,
   padding: number,
   taskNameWidth: number,
   headerHeight: number,
   canvasWidth: number,
-  canvasHeight: number,
+  bodyBottomY: number,
 ): void {
   const startX = padding + taskNameWidth;
 
@@ -159,7 +166,7 @@ function drawHeader(
   ctx.fillRect(padding, padding, canvasWidth - padding * 2, headerHeight);
 
   columns.forEach((col) => {
-    const x = startX + col.leftPx;
+    const x = startX + (col.leftPx - colOffsetX);
     if (col.isCurrent) {
       ctx.fillStyle = palette.todayBg;
       ctx.fillRect(x, padding, col.widthPx, headerHeight);
@@ -169,7 +176,11 @@ function drawHeader(
     ctx.textBaseline = 'middle';
     ctx.fillStyle = col.isCurrent ? palette.todayLine : palette.text;
     ctx.font = '600 9px "Plus Jakarta Sans", system-ui, sans-serif';
-    ctx.fillText(col.label, x + col.widthPx / 2, padding + headerHeight / 2 - (col.subLabel ? 7 : 0));
+    ctx.fillText(
+      col.label,
+      x + col.widthPx / 2,
+      padding + headerHeight / 2 - (col.subLabel ? 7 : 0),
+    );
 
     if (col.subLabel) {
       ctx.fillStyle = col.isCurrent ? palette.todayLine : palette.textMuted;
@@ -181,7 +192,7 @@ function drawHeader(
     ctx.lineWidth = 0.5;
     ctx.beginPath();
     ctx.moveTo(x, padding + headerHeight);
-    ctx.lineTo(x, canvasHeight - padding);
+    ctx.lineTo(x, bodyBottomY);
     ctx.stroke();
   });
 
@@ -192,15 +203,19 @@ function drawHeader(
   ctx.textBaseline = 'middle';
   ctx.fillText('TASK NAME', padding + 12, padding + headerHeight / 2);
 
-  // Header bottom border & vertical divider
+  // Header bottom border & vertical divider & outer frame
   ctx.strokeStyle = palette.gridLine;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padding, padding + headerHeight);
   ctx.lineTo(canvasWidth - padding, padding + headerHeight);
   ctx.moveTo(startX, padding);
-  ctx.lineTo(startX, canvasHeight - padding);
+  ctx.lineTo(startX, bodyBottomY);
   ctx.stroke();
+
+  ctx.strokeStyle = palette.gridLineFaint;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(padding, padding, canvasWidth - padding * 2, bodyBottomY - padding);
 }
 
 function drawDiamondMarker(
@@ -249,10 +264,15 @@ function drawDiamondMarker(
   }
 }
 
-export function renderGanttToCanvas(
+/**
+ * Renders the Gantt chart into one or more crisp 2× pages with balanced row breaks,
+ * column-boundary horizontal tiling when very wide, repeated headers on every page,
+ * and obstacle-aware dependency arrows.
+ */
+export function renderGanttPages(
   tasks: readonly Task[],
   options: CanvasRenderOptions,
-): RenderedGanttCanvas {
+): RenderedGanttCanvas[] {
   const flatTasks = flattenTasks(tasks);
   const baseRange = calculateTimelineRange(flatTasks, options.granularity ?? 'days');
   const granularity = options.granularity ?? detectOptimalGranularity(baseRange.days);
@@ -260,198 +280,70 @@ export function renderGanttToCanvas(
 
   const pixelsPerDay = getPixelsPerDay(granularity, 0.85);
   const columns = buildTimelineColumns(range.startDate, range.days, granularity, pixelsPerDay);
-  const timelineWidth = columns.reduce((sum, col) => sum + col.widthPx, 0);
 
   const barHeightPx = options.barHeight === 'compact' ? 18 : options.barHeight === 'large' ? 30 : 24;
   const rowHeightPx = barHeightPx + 16;
   const headerHeight = 44;
   const taskNameWidth = 230;
   const padding = 20;
+  const footerHeight = options.includeCanvasFooter ? 24 : 0;
   const scale = 2;
-
-  const logicalWidth = Math.max(820, taskNameWidth + timelineWidth + padding * 2);
-  const logicalHeight = headerHeight + flatTasks.length * rowHeightPx + padding * 2;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.ceil(logicalWidth * scale);
-  canvas.height = Math.ceil(logicalHeight * scale);
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Could not initialize 2D canvas context');
-  }
-
-  ctx.scale(scale, scale);
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
   const palette = PALETTES[options.theme];
 
-  // Canvas background
-  ctx.fillStyle = palette.background;
-  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-
-  const startX = padding + taskNameWidth;
-  const rowStartY = padding + headerHeight;
-
-  // Draw alternating rows first (so gridlines & bars sit cleanly above them)
-  flatTasks.forEach((_, idx) => {
-    const rowY = rowStartY + idx * rowHeightPx;
-    ctx.fillStyle = idx % 2 === 0 ? palette.rowEven : palette.rowOdd;
-    ctx.fillRect(padding, rowY, logicalWidth - padding * 2, rowHeightPx);
-
-    ctx.strokeStyle = palette.gridLineFaint;
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(padding, rowY + rowHeightPx);
-    ctx.lineTo(logicalWidth - padding, rowY + rowHeightPx);
-    ctx.stroke();
+  const pageSpecs = buildExportPagePlan({
+    totalRows: flatTasks.length,
+    columns,
+    rowHeightPx,
+    headerHeightPx: headerHeight,
+    taskNameWidthPx: taskNameWidth,
+    paddingPx: padding,
+    footerHeightPx: footerHeight,
   });
 
-  // Draw timeline headers & vertical gridlines
-  drawHeader(
-    ctx,
-    palette,
-    columns,
-    padding,
-    taskNameWidth,
-    headerHeight,
-    logicalWidth,
-    logicalHeight,
-  );
-
-  // Pre-compute task bar geometry for O(1) dependency routing
+  // Pre-compute global bar geometry & dependency routes once across all tasks
   const geomMap = new Map<number, { left: number; width: number }>();
+  const globalNodes: RoutableBarNode[] = [];
+  const globalNodeMap = new Map<number, RoutableBarNode>();
 
   flatTasks.forEach((task, idx) => {
     const geom = calculateTaskBarGeometry(task, range.startDate, pixelsPerDay, 24);
     geomMap.set(task.id, geom);
 
-    const rowY = rowStartY + idx * rowHeightPx;
-    const indent = task.level * 14;
-
-    // Task name & date label
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = palette.text;
-    ctx.font = task.hasChildren
-      ? '600 10px "Plus Jakarta Sans", system-ui, sans-serif'
-      : '500 10px "Plus Jakarta Sans", system-ui, sans-serif';
-
-    const maxNameWidth = taskNameWidth - indent - 24;
-    const displayName = truncateText(ctx, task.name, maxNameWidth);
-    ctx.fillText(displayName, padding + 12 + indent, rowY + rowHeightPx / 2 - 6);
-
-    ctx.fillStyle = palette.textMuted;
-    ctx.font = '400 8px "JetBrains Mono", monospace';
-    ctx.fillText(
-      formatDateRange(task.start, task.end),
-      padding + 12 + indent,
-      rowY + rowHeightPx / 2 + 7,
-    );
-
-    // Draw task bar or deadline diamond
-    const barX = startX + geom.left;
-    const barW = Math.max(24, geom.width);
-    const barY = rowY + (rowHeightPx - barHeightPx) / 2;
-    const completed = isTaskCompleted(task);
-
-    if (isTaskDeadline(task) && !options.useRoundedSubtasks) {
-      drawDiamondMarker(
-        ctx,
-        palette,
-        task,
-        barX + Math.min(barW, 24) / 2,
-        rowY + rowHeightPx / 2,
-        options.taskLabelPosition,
-      );
-      return;
-    }
-
-    drawRoundedRect(ctx, barX, barY, barW, barHeightPx, barHeightPx / 2);
-    ctx.fillStyle = getStatusGradient(ctx, palette, task, barX, barY, barW, barHeightPx);
-    ctx.fill();
-
-    if (task.progress > 0 && task.progress < 100) {
-      const progressW = (barW * task.progress) / 100;
-      drawRoundedRect(ctx, barX, barY, Math.max(6, progressW), barHeightPx, barHeightPx / 2);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.fill();
-    }
-
-    const label = task.progress > 0 && !completed ? `${task.name} ${task.progress}%` : task.name;
-    if (options.taskLabelPosition === 'inside' && barW > 52) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '600 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(truncateText(ctx, label, barW - 14), barX + barW / 2, barY + barHeightPx / 2);
-    } else if (options.taskLabelPosition === 'outside') {
-      ctx.fillStyle = palette.text;
-      ctx.font = '500 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, barX + barW + 8, barY + barHeightPx / 2);
-    }
+    const right = geom.left + Math.max(24, geom.width);
+    const node: RoutableBarNode = {
+      id: task.id,
+      rowIndex: idx,
+      left: geom.left,
+      right,
+      labelRight:
+        options.taskLabelPosition === 'outside'
+          ? right + Math.min(200, task.name.length * 5.8 + 20)
+          : right,
+      centerY: idx * rowHeightPx + rowHeightPx / 2,
+    };
+    globalNodes.push(node);
+    globalNodeMap.set(task.id, node);
   });
 
-  // Draw Today line if within visible range
-  const today = getTodayLocal();
-  if (today >= range.startDate && today <= range.endDate) {
-    const todayX = startX + calculateTodayOffsetPx(range.startDate, pixelsPerDay, today);
-    ctx.strokeStyle = palette.todayLine;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(todayX, rowStartY);
-    ctx.lineTo(todayX, logicalHeight - padding);
-    ctx.stroke();
+  const routedDeps: Array<{
+    points: Array<{ x: number; y: number }>;
+    targetX: number;
+    targetY: number;
+    minY: number;
+    maxY: number;
+  }> = [];
 
-    ctx.fillStyle = palette.todayLine;
-    ctx.beginPath();
-    ctx.arc(todayX, rowStartY, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Draw dependency arrows if enabled (using the same obstacle-aware router as the live SVG)
   if (options.showDependencyLines) {
-    ctx.strokeStyle = palette.depLine;
-    ctx.fillStyle = palette.depLine;
-    ctx.lineWidth = 1.4;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const routableNodes: RoutableBarNode[] = [];
-    const routableNodeMap = new Map<number, RoutableBarNode>();
-    flatTasks.forEach((task, idx) => {
-      const geom = geomMap.get(task.id);
-      if (!geom) return;
-      const left = startX + geom.left;
-      const right = left + Math.max(24, geom.width);
-      const node: RoutableBarNode = {
-        id: task.id,
-        rowIndex: idx,
-        left,
-        right,
-        labelRight:
-          options.taskLabelPosition === 'outside'
-            ? right + Math.min(180, task.name.length * 5.5 + 16)
-            : right,
-        centerY: rowStartY + idx * rowHeightPx + rowHeightPx / 2,
-      };
-      routableNodes.push(node);
-      routableNodeMap.set(task.id, node);
-    });
-
     const sourceLaneCounts = new Map<number, number>();
     const targetLaneCounts = new Map<number, number>();
 
     flatTasks.forEach((task) => {
       if (!task.dependencies?.length) return;
-      const target = routableNodeMap.get(task.id);
+      const target = globalNodeMap.get(task.id);
       if (!target) return;
 
       task.dependencies.forEach((depId) => {
-        const source = routableNodeMap.get(depId);
+        const source = globalNodeMap.get(depId);
         if (!source) return;
 
         const sourceLaneIndex = sourceLaneCounts.get(depId) ?? 0;
@@ -462,16 +354,170 @@ export function renderGanttToCanvas(
         const routed = routeDependencyArrow({
           source,
           target,
-          allNodes: routableNodes,
+          allNodes: globalNodes,
           rowHeight: rowHeightPx,
-          rowOffsetY: rowStartY,
+          rowOffsetY: 0,
           sourceLaneIndex,
           targetLaneIndex,
           cornerRadius: 5,
           arrowTipInset: 6,
         });
 
-        const pts = routed.points;
+        const ys = routed.points.map((p) => p.y);
+        routedDeps.push({
+          points: routed.points,
+          targetX: target.left,
+          targetY: target.centerY,
+          minY: Math.min(...ys),
+          maxY: Math.max(...ys),
+        });
+      });
+    });
+  }
+
+  const today = getTodayLocal();
+  const hasToday = today >= range.startDate && today <= range.endDate;
+  const globalTodayX = hasToday
+    ? calculateTodayOffsetPx(range.startDate, pixelsPerDay, today)
+    : null;
+
+  const granLabel = granularity.charAt(0).toUpperCase() + granularity.slice(1);
+  const dateLabel = new Date().toLocaleDateString();
+
+  const hasHorizontalPaging = pageSpecs.some((p) => p.colSlice.startCol > 0);
+
+  return pageSpecs.map((spec) => {
+    const pageTasks = flatTasks.slice(spec.rowSlice.startRow, spec.rowSlice.endRow);
+    const pageColumns = columns.slice(spec.colSlice.startCol, spec.colSlice.endCol);
+    const sliceTimelineWidth = hasHorizontalPaging
+      ? Math.max(240, spec.colSlice.widthPx)
+      : Math.max(560, spec.colSlice.widthPx);
+    const logicalWidth = hasHorizontalPaging
+      ? taskNameWidth + sliceTimelineWidth + padding * 2
+      : Math.max(820, taskNameWidth + sliceTimelineWidth + padding * 2);
+    const bodyHeight = pageTasks.length * rowHeightPx;
+    const rowStartY = padding + headerHeight;
+    const bodyBottomY = rowStartY + bodyHeight;
+    const logicalHeight = bodyBottomY + padding + footerHeight;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(logicalWidth * scale);
+    canvas.height = Math.ceil(logicalHeight * scale);
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Could not initialize 2D canvas context');
+    }
+
+    ctx.scale(scale, scale);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Page background
+    ctx.fillStyle = palette.background;
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+    const startX = padding + taskNameWidth;
+    const timelineClipWidth = logicalWidth - padding - startX;
+    const rowOffsetGlobalY = spec.rowSlice.startRow * rowHeightPx;
+    const colOffsetX = spec.colSlice.offsetX;
+
+    // Alternating rows
+    pageTasks.forEach((_, localIdx) => {
+      const globalIdx = spec.rowSlice.startRow + localIdx;
+      const rowY = rowStartY + localIdx * rowHeightPx;
+      ctx.fillStyle = globalIdx % 2 === 0 ? palette.rowEven : palette.rowOdd;
+      ctx.fillRect(padding, rowY, logicalWidth - padding * 2, rowHeightPx);
+
+      ctx.strokeStyle = palette.gridLineFaint;
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(padding, rowY + rowHeightPx);
+      ctx.lineTo(logicalWidth - padding, rowY + rowHeightPx);
+      ctx.stroke();
+    });
+
+    // Repeated Header + vertical gridlines
+    drawHeader(
+      ctx,
+      palette,
+      pageColumns,
+      colOffsetX,
+      padding,
+      taskNameWidth,
+      headerHeight,
+      logicalWidth,
+      bodyBottomY,
+    );
+
+    // Left Task Name column rows
+    pageTasks.forEach((task, localIdx) => {
+      const rowY = rowStartY + localIdx * rowHeightPx;
+      const indent = task.level * 14;
+
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = palette.text;
+      ctx.font = task.hasChildren
+        ? '600 10px "Plus Jakarta Sans", system-ui, sans-serif'
+        : '500 10px "Plus Jakarta Sans", system-ui, sans-serif';
+
+      const maxNameWidth = taskNameWidth - indent - 24;
+      const displayName = truncateText(ctx, task.name, maxNameWidth);
+      ctx.fillText(displayName, padding + 12 + indent, rowY + rowHeightPx / 2 - 6);
+
+      ctx.fillStyle = palette.textMuted;
+      ctx.font = '400 8px "JetBrains Mono", monospace';
+      ctx.fillText(
+        formatDateRange(task.start, task.end),
+        padding + 12 + indent,
+        rowY + rowHeightPx / 2 + 7,
+      );
+    });
+
+    // Clipped timeline body region (bars, Today line, obstacle-aware dependency arrows)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(startX, rowStartY, timelineClipWidth, bodyHeight);
+    ctx.clip();
+
+    // Draw Today line if inside this horizontal slice
+    if (globalTodayX !== null) {
+      const todayX = startX + (globalTodayX - colOffsetX);
+      if (todayX >= startX && todayX <= startX + timelineClipWidth) {
+        ctx.strokeStyle = palette.todayLine;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(todayX, rowStartY);
+        ctx.lineTo(todayX, bodyBottomY);
+        ctx.stroke();
+
+        ctx.fillStyle = palette.todayLine;
+        ctx.beginPath();
+        ctx.arc(todayX, rowStartY, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Draw obstacle-aware dependency arrows intersecting this page slice
+    if (options.showDependencyLines && routedDeps.length > 0) {
+      ctx.strokeStyle = palette.depLine;
+      ctx.fillStyle = palette.depLine;
+      ctx.lineWidth = 1.4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      const sliceTopGlobalY = rowOffsetGlobalY;
+      const sliceBottomGlobalY = rowOffsetGlobalY + bodyHeight;
+
+      routedDeps.forEach((dep) => {
+        if (dep.maxY < sliceTopGlobalY || dep.minY > sliceBottomGlobalY) return;
+
+        const pts = dep.points.map((p) => ({
+          x: startX + (p.x - colOffsetX),
+          y: rowStartY + (p.y - rowOffsetGlobalY),
+        }));
+
         if (pts.length >= 2) {
           ctx.beginPath();
           ctx.moveTo(pts[0]!.x, pts[0]!.y);
@@ -493,23 +539,110 @@ export function renderGanttToCanvas(
           ctx.stroke();
         }
 
-        const toX = target.left;
-        const toY = target.centerY;
-        ctx.beginPath();
-        ctx.moveTo(toX, toY);
-        ctx.lineTo(toX - 7, toY - 3.5);
-        ctx.lineTo(toX - 7, toY + 3.5);
-        ctx.closePath();
-        ctx.fill();
+        const toY = rowStartY + (dep.targetY - rowOffsetGlobalY);
+        if (toY >= rowStartY && toY <= bodyBottomY) {
+          const toX = startX + (dep.targetX - colOffsetX);
+          ctx.beginPath();
+          ctx.moveTo(toX, toY);
+          ctx.lineTo(toX - 7, toY - 3.5);
+          ctx.lineTo(toX - 7, toY + 3.5);
+          ctx.closePath();
+          ctx.fill();
+        }
       });
-    });
-  }
+    }
 
-  return {
-    canvas,
-    logicalWidth,
-    logicalHeight,
-    taskCount: flatTasks.length,
-    granularity,
-  };
+    // Draw task bars / diamonds for this page
+    pageTasks.forEach((task, localIdx) => {
+      const geom = geomMap.get(task.id);
+      if (!geom) return;
+
+      const rowY = rowStartY + localIdx * rowHeightPx;
+      const barX = startX + (geom.left - colOffsetX);
+      const barW = Math.max(24, geom.width);
+      const barY = rowY + (rowHeightPx - barHeightPx) / 2;
+      const completed = isTaskCompleted(task);
+
+      if (isTaskDeadline(task) && !options.useRoundedSubtasks) {
+        drawDiamondMarker(
+          ctx,
+          palette,
+          task,
+          barX + Math.min(barW, 24) / 2,
+          rowY + rowHeightPx / 2,
+          options.taskLabelPosition,
+        );
+        return;
+      }
+
+      drawRoundedRect(ctx, barX, barY, barW, barHeightPx, barHeightPx / 2);
+      ctx.fillStyle = getStatusGradient(ctx, palette, task, barX, barY, barW, barHeightPx);
+      ctx.fill();
+
+      if (task.progress > 0 && task.progress < 100) {
+        const progressW = (barW * task.progress) / 100;
+        drawRoundedRect(ctx, barX, barY, Math.max(6, progressW), barHeightPx, barHeightPx / 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.fill();
+      }
+
+      const label = task.progress > 0 && !completed ? `${task.name} ${task.progress}%` : task.name;
+      if (options.taskLabelPosition === 'inside' && barW > 52) {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '600 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(truncateText(ctx, label, barW - 14), barX + barW / 2, barY + barHeightPx / 2);
+      } else if (options.taskLabelPosition === 'outside') {
+        ctx.fillStyle = palette.text;
+        ctx.font = '500 8.5px "Plus Jakarta Sans", system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, barX + barW + 8, barY + barHeightPx / 2);
+      }
+    });
+
+    ctx.restore();
+
+    // Optional canvas metadata footer (used for PNG exports)
+    if (options.includeCanvasFooter) {
+      const footerY = logicalHeight - padding / 2 - 4;
+      const prefix = options.workspaceTitle ? `${options.workspaceTitle}  |  ` : '';
+      ctx.fillStyle = palette.textMuted;
+      ctx.font = '500 8.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(
+        `${prefix}Exported ${dateLabel}  |  ${flatTasks.length} tasks  |  View: ${granLabel}`,
+        padding,
+        footerY,
+      );
+
+      if (spec.totalPages > 1) {
+        ctx.textAlign = 'right';
+        ctx.fillText(`Page ${spec.pageNumber} of ${spec.totalPages}`, logicalWidth - padding, footerY);
+      }
+    }
+
+    return {
+      canvas,
+      logicalWidth,
+      logicalHeight,
+      taskCount: flatTasks.length,
+      granularity,
+      pageNumber: spec.pageNumber,
+      totalPages: spec.totalPages,
+    };
+  });
+}
+
+/**
+ * Backward-compatible single-page helper returning the first rendered page.
+ */
+export function renderGanttToCanvas(
+  tasks: readonly Task[],
+  options: CanvasRenderOptions,
+): RenderedGanttCanvas {
+  const pages = renderGanttPages(tasks, options);
+  return pages[0]!;
 }
