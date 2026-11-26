@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Live Gantt App
+    url: https://ganttapp.vercel.app
+    about: Open the hosted Gantt timeline studio in your browser.
+  - name: Terms of Use & Privacy Policy
+    url: https://ganttapp.vercel.app/terms
+    about: Review how Gantt stores workspace data, share links, and Telegram alerts.

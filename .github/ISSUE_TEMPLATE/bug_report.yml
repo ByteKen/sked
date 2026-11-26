@@ -1,0 +1,92 @@
+name: Bug Report
+description: Report a bug, rendering glitch, sync issue, or unexpected behavior in Gantt
+title: "[Bug]: "
+labels: ["bug", "needs triage"]
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before Submitting
+      description: Confirm these quick checks first so we can investigate faster.
+      options:
+        - label: I tested on the latest live version at [ganttapp.vercel.app](https://ganttapp.vercel.app) (or latest `main` locally)
+          required: true
+        - label: I searched existing open and closed [issues](https://github.com/ByteKen/ganttapp/issues) for duplicates
+          required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      description: How severely does this affect your planning session?
+      options:
+        - Blocker (cannot sign in, load workspace, or save tasks)
+        - Major (feature broken, export fails, or data displays incorrectly)
+        - Moderate (noticeable glitch with a workaround)
+        - Minor (visual polish, typo, or edge case)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Workspace / Subsystem
+      description: Choose the part of Gantt where the issue occurs.
+      options:
+        - Timeline & Gantt Chart (zoom, pan, bars, layout)
+        - Tasks, Subtasks & Dependencies
+        - Workspaces & Cloud Sync
+        - Public Share Links (/share)
+        - PDF / PNG / CSV / JSON Export & Import
+        - Telegram Deadline Alerts
+        - Settings, Profile & Account
+        - Authentication & Sign-In
+        - Mobile / Responsive UI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: What Happened & Steps to Reproduce
+      description: Describe the exact steps needed to trigger the issue.
+      placeholder: |
+        1. Open a workspace in Months view
+        2. Add a dependency between two tasks
+        3. Click Import / Export -> Export PDF...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: Tell us what you expected to happen instead.
+      placeholder: The PDF exports across balanced landscape pages with no clipped bars.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did you run into this issue?
+      options:
+        - Desktop Web (Chrome / Edge / Brave)
+        - Desktop Web (Firefox)
+        - Desktop Web (Safari)
+        - Mobile Web (Android)
+        - Mobile Web (iOS Safari)
+        - Self-Hosted / Local Dev
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, Console Errors, or Sample JSON
+      description: Attach screenshots or paste relevant browser console errors. Remove private data before sharing exported JSON.
+      placeholder: Paste screenshots or error logs here...
+    validations:
+      required: false

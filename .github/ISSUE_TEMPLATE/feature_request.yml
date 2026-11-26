@@ -1,0 +1,58 @@
+name: Feature Request
+description: Suggest a new capability or workflow improvement for Gantt
+title: "[Feature]: "
+labels: ["enhancement", "needs triage"]
+body:
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before Submitting
+      description: Confirm this quick check before opening a new request.
+      options:
+        - label: I searched existing open and closed [issues](https://github.com/ByteKen/ganttapp/issues) to check if this is already suggested
+          required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Workspace / Subsystem
+      description: Choose the area of Gantt this suggestion relates to.
+      options:
+        - Timeline & Gantt Chart (zoom, pan, bars, layout)
+        - Tasks, Subtasks & Dependencies
+        - Workspaces & Cloud Sync
+        - Public Share Links (/share)
+        - PDF / PNG / CSV / JSON Export & Import
+        - Telegram Deadline Alerts
+        - Settings, Profile & Account
+        - Mobile / Responsive UI
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or Use Case
+      description: What are you trying to do today that feels slow, awkward, or missing?
+      placeholder: Describe the workflow gap or pain point...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe how you would like this to work in Gantt.
+      placeholder: Explain the behavior or UI change you have in mind...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Alternatives, Mockups, or Extra Context
+      description: Add screenshots, rough sketches, or workarounds you currently use.
+      placeholder: Optional screenshots, links, or notes...
+    validations:
+      required: false
