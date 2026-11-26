@@ -15,7 +15,6 @@ export interface AppHeaderProps {
   onSearchChange: (val: string) => void;
   onGoHome: () => void;
   onOpenSettings: () => void;
-  onOpenImport: () => void;
   onRequestLogout: () => void;
 }
 
@@ -26,7 +25,6 @@ export function AppHeader({
   onSearchChange,
   onGoHome,
   onOpenSettings,
-  onOpenImport,
   onRequestLogout,
 }: AppHeaderProps) {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -101,7 +99,6 @@ export function AppHeader({
               user={user}
               onGoHome={onGoHome}
               onOpenSettings={onOpenSettings}
-              onOpenImport={onOpenImport}
               onRequestLogout={onRequestLogout}
               className="md:hidden"
             />

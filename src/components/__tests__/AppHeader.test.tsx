@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { AppHeader } from '@/components/layout/AppHeader';
+import { MobileBottomBar } from '@/components/layout/MobileNav';
 
 vi.mock('@/store/workspaceStore', () => ({
   useWorkspaceStore: (selector: (s: unknown) => unknown) =>
@@ -22,7 +23,7 @@ vi.mock('@/store/workspaceStore', () => ({
     }),
 }));
 
-describe('AppHeader direct workspace & profile menu', () => {
+describe('AppHeader direct workspace & profile menu + unified bottom Import/Export menu', () => {
   const user = {
     id: 'u1',
     name: 'Alex Rivera',
@@ -31,9 +32,8 @@ describe('AppHeader direct workspace & profile menu', () => {
     loginTime: '2026-01-01T00:00:00Z',
   };
 
-  it('renders workspace selector and profile menu directly on the topbar without a sidebar drawer button', async () => {
+  it('renders workspace selector and streamlined profile menu (Settings, no Import JSON) directly on topbar', async () => {
     const onOpenSettings = vi.fn();
-    const onOpenImport = vi.fn();
     const onRequestLogout = vi.fn();
 
     render(
@@ -45,45 +45,70 @@ describe('AppHeader direct workspace & profile menu', () => {
           onSearchChange={vi.fn()}
           onGoHome={vi.fn()}
           onOpenSettings={onOpenSettings}
-          onOpenImport={onOpenImport}
           onRequestLogout={onRequestLogout}
         />
       </MemoryRouter>,
     );
 
-    // No hamburger menu button
     expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
-
-    // Workspace selector directly in topbar
     expect(screen.getByRole('button', { name: /plotwise/i })).toBeInTheDocument();
 
-    // Profile menu opens & closes cleanly on repeated click
     const profileTrigger = screen.getByRole('button', {
       name: /open profile menu for alex rivera/i,
     });
     fireEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'true');
     const menu = screen.getByRole('menu');
-    expect(menu).toBeInTheDocument();
     expect(within(menu).getByText('alex@example.com')).toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: /import json/i })).not.toBeInTheDocument();
 
     fireEvent.click(profileTrigger);
     expect(profileTrigger).toHaveAttribute('aria-expanded', 'false');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 
-    // Triggering menu actions works and closes menu
     fireEvent.click(profileTrigger);
-    fireEvent.click(screen.getByRole('menuitem', { name: /settings & alerts/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /^settings$/i }));
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-
-    fireEvent.click(profileTrigger);
-    fireEvent.click(screen.getByRole('menuitem', { name: /import json/i }));
-    expect(onOpenImport).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 
     fireEvent.click(profileTrigger);
     fireEvent.click(screen.getByRole('menuitem', { name: /sign out/i }));
     expect(onRequestLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('merges Import JSON and Export formats inside the bottom Export menu', async () => {
+    const onOpenImport = vi.fn();
+    const onExport = vi.fn();
+
+    render(
+      <MobileBottomBar
+        workspace={{
+          id: 'ws_1',
+          title: 'Plotwise',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        }}
+        mobileView="chart"
+        onChangeView={vi.fn()}
+        onAddTask={vi.fn()}
+        onOpenShare={vi.fn()}
+        onOpenImport={onOpenImport}
+        onExport={onExport}
+      />,
+    );
+
+    const exportBtn = screen.getByRole('button', { name: /import or export tasks/i });
+    fireEvent.click(exportBtn);
+
+    expect(screen.getByRole('menuitem', { name: /import json/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /export pdf/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /import json/i }));
+    expect(onOpenImport).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+    fireEvent.click(exportBtn);
+    fireEvent.click(screen.getByRole('menuitem', { name: /export pdf/i }));
+    expect(onExport).toHaveBeenCalledWith('pdf');
   });
 });

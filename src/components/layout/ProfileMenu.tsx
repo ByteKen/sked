@@ -7,7 +7,6 @@ import {
   MoonStars,
   SignOut,
   SunDim,
-  UploadSimple,
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { usePreferencesStore } from '@/store/preferencesStore';
@@ -19,7 +18,6 @@ export interface ProfileMenuProps {
   user: AuthUser;
   onGoHome: () => void;
   onOpenSettings: () => void;
-  onOpenImport?: () => void;
   onRequestLogout: () => void;
   className?: string;
 }
@@ -28,7 +26,6 @@ export function ProfileMenu({
   user,
   onGoHome,
   onOpenSettings,
-  onOpenImport,
   onRequestLogout,
   className,
 }: ProfileMenuProps) {
@@ -121,26 +118,8 @@ export function ProfileMenu({
                   className="w-[18px] h-[18px] text-brand-600 dark:text-brand-400 shrink-0"
                   weight="duotone"
                 />
-                Settings &amp; Alerts
+                Settings
               </button>
-
-              {onOpenImport && (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setOpen(false);
-                    onOpenImport();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 h-10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/[0.06] cursor-pointer text-left"
-                >
-                  <UploadSimple
-                    className="w-[18px] h-[18px] text-brand-600 dark:text-brand-400 shrink-0"
-                    weight="duotone"
-                  />
-                  Import JSON
-                </button>
-              )}
 
               <button
                 type="button"

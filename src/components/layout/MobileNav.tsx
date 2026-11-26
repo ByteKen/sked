@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import {
+  ArrowsDownUp,
   ChartBarHorizontal,
-  DownloadSimple,
   ListChecks,
   Plus,
   ShareNetwork,
@@ -17,6 +17,7 @@ export interface MobileBottomBarProps {
   onChangeView: (view: 'chart' | 'list') => void;
   onAddTask: () => void;
   onOpenShare: () => void;
+  onOpenImport: () => void;
   onExport: (format: ExportFormat) => void;
 }
 
@@ -26,6 +27,7 @@ export function MobileBottomBar({
   onChangeView,
   onAddTask,
   onOpenShare,
+  onOpenImport,
   onExport,
 }: MobileBottomBarProps) {
   const [exportOpen, setExportOpen] = useState(false);
@@ -96,16 +98,20 @@ export function MobileBottomBar({
             ref={exportBtnRef}
             type="button"
             onClick={() => setExportOpen((v) => !v)}
+            aria-label="Import or export tasks"
+            aria-expanded={exportOpen}
+            aria-haspopup="menu"
             className="flex flex-col items-center justify-center gap-0.5 min-h-[44px] w-full rounded-xl text-[10px] font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
           >
-            <DownloadSimple className="w-5 h-5" weight="duotone" />
-            Export
+            <ArrowsDownUp className="w-5 h-5" weight="duotone" />
+            <span className="whitespace-nowrap tracking-tight">Import/Export</span>
           </button>
           <AnimatePresence>
             {exportOpen && (
               <ExportMenu
                 placement="top"
                 triggerRef={exportBtnRef}
+                onImport={onOpenImport}
                 onSelect={onExport}
                 onClose={() => setExportOpen(false)}
               />

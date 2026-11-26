@@ -1,10 +1,9 @@
 import { useRef, useState } from 'react';
 import {
+  ArrowsDownUp,
   CaretUp,
-  DownloadSimple,
   Plus,
   ShareNetwork,
-  UploadSimple,
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ExportMenu } from '@/components/workspace/ExportMenu';
@@ -70,23 +69,7 @@ export function FloatingActionDock({
           <span>{isShared ? 'Shared' : 'Share'}</span>
         </motion.button>
 
-        {/* Import */}
-        <motion.button
-          type="button"
-          whileTap={{ scale: 0.96 }}
-          transition={SPRING_SNAPPY}
-          onClick={onOpenImport}
-          title="Import tasks from JSON"
-          className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-xs sm:text-[13px] font-semibold text-slate-700 hover:text-slate-950 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:text-white dark:hover:bg-white/[0.08] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-        >
-          <UploadSimple
-            className="w-[18px] h-[18px] text-brand-600 dark:text-brand-400"
-            weight="duotone"
-          />
-          <span>Import</span>
-        </motion.button>
-
-        {/* Export (opens upward cleanly) */}
+        {/* Unified Import / Export (opens upward cleanly) */}
         <div className="relative">
           <motion.button
             ref={exportBtnRef}
@@ -96,7 +79,7 @@ export function FloatingActionDock({
             onClick={() => setExportOpen((v) => !v)}
             aria-expanded={exportOpen}
             aria-haspopup="menu"
-            title="Export PDF, PNG, CSV, or JSON"
+            title="Import JSON or export PDF, PNG, CSV, JSON"
             className={cn(
               'inline-flex items-center gap-2 h-10 px-4 rounded-full text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
               exportOpen
@@ -104,11 +87,11 @@ export function FloatingActionDock({
                 : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:text-white dark:hover:bg-white/[0.08]',
             )}
           >
-            <DownloadSimple
+            <ArrowsDownUp
               className="w-[18px] h-[18px] text-brand-600 dark:text-brand-400"
               weight="duotone"
             />
-            <span>Export</span>
+            <span>Import / Export</span>
             <CaretUp
               weight="bold"
               className={cn(
@@ -123,6 +106,7 @@ export function FloatingActionDock({
               <ExportMenu
                 placement="top"
                 triggerRef={exportBtnRef}
+                onImport={onOpenImport}
                 onSelect={onExport}
                 onClose={() => setExportOpen(false)}
               />

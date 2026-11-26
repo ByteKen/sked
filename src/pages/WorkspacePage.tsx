@@ -236,7 +236,6 @@ export function WorkspacePage() {
           onSearchChange={setSearchTerm}
           onGoHome={() => navigate('/')}
           onOpenSettings={() => setSettingsModalOpen(true)}
-          onOpenImport={() => setImportModalOpen(true)}
           onRequestLogout={() => setLogoutConfirmOpen(true)}
         />
       )}
@@ -343,6 +342,7 @@ export function WorkspacePage() {
           onChangeView={setMobileView}
           onAddTask={handleOpenNewTask}
           onOpenShare={() => setShareModalOpen(true)}
+          onOpenImport={() => setImportModalOpen(true)}
           onExport={(fmt) => void handleExport(fmt)}
         />
       )}
