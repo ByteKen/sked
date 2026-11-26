@@ -1,135 +1,57 @@
-# Gantt — Modern Project Timelines & Shareable Gantt Charts
+<p align="center">
+  <img src="./assets/social-preview.png" alt="Gantt - Plan. Organize. Track Progress." width="100%" />
+</p>
 
-A production-ready TypeScript Gantt chart studio built with React 19, Vite, Tailwind CSS, Framer Motion, Zustand, Firebase Authentication, Cloud Firestore, and Vercel Serverless Functions. Open to any Google account with live public shareable charts, task descriptions, account deletion, and Telegram deadline reminders.
+<p align="center">
+  <a href="https://ganttapp.vercel.app">Live App</a> ·
+  <a href="https://ganttapp.vercel.app/terms">Terms of Use</a> ·
+  <a href="https://ganttapp.vercel.app/privacy">Privacy Policy</a> ·
+  <a href="./LICENSE">License</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/version-v2.0.0-3b6bff?style=flat-square" alt="Version v2.0.0" />
+  <img src="https://img.shields.io/badge/license-Apache%202.0-10b981?style=flat-square" alt="Apache 2.0 License" />
+  <img src="https://img.shields.io/badge/stack-React%20%C2%B7%20TypeScript%20%C2%B7%20Firebase-0f172a?style=flat-square" alt="React TypeScript Firebase" />
+</p>
+
+<p align="center">
+  <strong>Leave a star if you find this project helpful!</strong>
+</p>
+
+## About
+
+Gantt is a browser-based project timeline app for planning schedules, tracking subtasks and dependencies, exporting multi-page charts, and sharing live read-only links.
+
+> [!NOTE]
+> Open to any Google account with real-time Firebase cloud sync, optional Telegram deadline alerts, and zero ad trackers.
 
 ## Features
 
-- **Open Google Authentication**: Any Google account (personal, school, or work) can sign in — zero domain limits — with self-service account deletion.
-- **Unified Split-Pane Gantt Engine**:
-  - Resizable Task Hierarchy + Timeline split pane with active-source locked vertical scroll sync
-  - Collapse/expand parent groups synchronized 1:1 between tree rows and timeline bars
-  - Task descriptions with an instant inline timeline toggle, hover cards, search indexing, and CSV/JSON import & export
-  - Subtasks, auto-calculated parent progress, single-day deadline milestones, dependency arrows, and parent-child brackets
-  - Five timeline granularities (`Days`, `Weeks`, `Months`, `Quarters`, `Years`), zoom (`50%–300%`), Auto-Fit, Today marker, and keyboard shortcuts (`/`, `N`, `+`, `-`, `T`)
-- **Live Shareable Gantt Charts (`/share/:shareId`)**:
-  - Toggle public read-only link on/off per workspace with live Firestore sync
-  - Regenerate link to invalidate older URLs
-  - Viewers can **Duplicate to Workspace** with one click (routing anonymously through Google Sign-In seamlessly)
-- **Telegram Deadline Bot Alerts (Vercel Serverless + Cron)**:
-  - 1-tap deep-link connection from **Settings → Telegram Deadline Alerts**
-  - Exact timezone-aware calendar-day countdowns (`7d`, `5d`, `3d`, `2d`, `1d`, `Due today`, + optional `Overdue`) with idempotent deduplication
-  - Interactive Telegram bot commands (`/upcoming`, `/pause`, `/resume`, `/stop`)
-- **Full Export & Atomic JSON Import**:
-  - Export to **PDF** (lazy-loaded `jsPDF`), **PNG** (2× Retina), **CSV**, and **JSON**
-  - Paste or upload `.json` files with live schema validation and atomic batch persistence
+- **Nested Tasks & Subtasks:** Organize multi-level phases, tasks, and single-day milestones with automatic parent progress rollups.
+- **Smart Dependency Arrows:** Connect blocking tasks with obstacle-aware routing that stays clear of bars and labels.
+- **Flexible Timeline Views:** Switch between Days, Weeks, Months, Quarters, and Years, with `Ctrl + Scroll` zoom, `Shift + Scroll` panning, and mobile pinch-to-zoom.
+- **Multi-Workspace Cloud Sync:** Manage multiple projects synced in real time through Firebase Cloud Firestore.
+- **Live Shareable Links:** Publish read-only `/share/:shareId` links with live updates, custom "Shared by" profile names, and one-click duplication.
+- **Telegram Deadline Alerts:** Connect Telegram in one tap for timezone-aware reminders, overdue digests, and bot commands (`/upcoming`, `/pause`, `/resume`, `/stop`).
+- **Multi-Page Exports & JSON Import:** Export balanced multi-page PDFs, crisp 2x PNG images, CSV, or JSON, and import `.json` backups with validation.
+- **Light & Dark Themes:** Daylight and dark interfaces with tabbed settings for Profile, Display, Export, Alerts, and Shortcuts.
+- **Full Account Control:** Export your data or permanently delete your account, workspaces, public links, and Telegram link anytime from `Settings -> Profile`.
 
----
-
-## Local Development
-
-### 1. Install Dependencies
+## Get started
 
 ```bash
 npm install
+cp .env.example .env.local
+npm run dev
 ```
 
-### 2. Environment Variables
+Fill in your Firebase web config in `.env.local` and publish [`firestore.rules`](./firestore.rules) in Firebase Console. For Vercel deployment and optional Telegram alerts, configure the server environment variables listed in [`.env.example`](./.env.example).
 
-Copy `.env.example` to `.env.local` and supply your Firebase web app credentials (`VITE_FIREBASE_*`). For local testing of `/api/*` serverless routes, run `vercel dev` with the server-only environment variables from `.env.example`.
+## Goal
 
-### 3. Scripts
+This is a personal project built to keep Gantt scheduling fast and uncluttered. If it does not cover every workflow, other project tools may be a better fit, though bug reports and suggestions are always welcome in [GitHub Issues](https://github.com/ByteKen/ganttapp/issues).
 
-```bash
-npm run dev        # Start local Vite dev server
-npm run typecheck  # Strict TypeScript check across app, node, and api (tsc -b --noEmit)
-npm run lint       # ESLint + typescript-eslint
-npm run test       # Run Vitest unit & component tests
-npm run build      # Typecheck + production bundle
-npm run preview    # Preview built bundle locally
-```
+## License
 
----
-
-## Production Firebase Security Rules
-
-Publish [`firestore.rules`](./firestore.rules) in Firebase Console → **Firestore Database → Rules** so private user data stays owner-only, `/share/:shareId` public links work safely, and server-only Telegram collections cannot be accessed from browsers:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    match /sharedCharts/{shareId} {
-      allow get: if true;
-      allow list: if false;
-      allow create: if request.auth != null
-                    && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if request.auth != null
-                            && resource.data.ownerId == request.auth.uid;
-    }
-
-    match /telegramSubscriptions/{userId} {
-      allow read, write: if false;
-    }
-    match /telegramLinkTokens/{tokenId} {
-      allow read, write: if false;
-    }
-  }
-}
-```
-
----
-
-## Telegram Deadline Bot Setup (Vercel — Zero Separate Server)
-
-1. **Create a bot in Telegram**: Message [@BotFather](https://t.me/BotFather) → `/newbot` → copy the bot token and username (without `@`).
-2. **Generate a Firebase Service Account**: Firebase Console → **Project Settings → Service accounts → Generate new private key**.
-3. **Add Environment Variables in Vercel** (Settings → Environment Variables — do **not** prefix with `VITE_`):
-   - `TELEGRAM_BOT_TOKEN`
-   - `TELEGRAM_BOT_USERNAME`
-   - `TELEGRAM_WEBHOOK_SECRET` (any long random string)
-   - `CRON_SECRET` (any long random string — Vercel Cron sends this automatically)
-   - `FIREBASE_SERVICE_ACCOUNT_JSON` (raw JSON or base64-encoded service account JSON)
-   - `APP_BASE_URL` (e.g., `https://your-app.vercel.app`)
-4. **Deploy to Vercel**, then register your webhook **once**:
-   ```bash
-   curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
-     -H "Content-Type: application/json" \
-     -d '{"url":"https://your-app.vercel.app/api/telegram/webhook","secret_token":"<TELEGRAM_WEBHOOK_SECRET>"}'
-   ```
-5. **Scheduling**:
-   - **Daily reminders (included automatically)**: `vercel.json` runs `/api/cron/reminders?mode=daily` every day at `00:00 UTC` (`08:00 AM PHT`).
-   - **Optional hourly per-user-timezone reminders**: Add `APP_BASE_URL` and `CRON_SECRET` to your GitHub repo's **Settings → Secrets → Actions** to enable [`.github/workflows/telegram-reminders.yml`](./.github/workflows/telegram-reminders.yml).
-
----
-
-## Architecture Overview
-
-```text
-api/
-├── _lib/           # Firebase Admin singleton, Bearer verification, Telegram HTTP adapter
-├── telegram/
-│   ├── manage.ts   # Authenticated link creation, settings sync, test alert, disconnect
-│   └── webhook.ts  # Telegram webhook (/start <token>, /upcoming, /pause, /resume, /stop)
-└── cron/
-    └── reminders.ts # Deduplicated timezone-aware daily/hourly deadline dispatcher
-
-src/
-├── types/          # Strict domain, preferences & Firestore TypeScript interfaces
-├── domain/         # Pure taskTree, timeline math, validation, and deadline reminders (unit tested)
-├── config/         # Firebase Auth (open to all Google accounts) & Firestore
-├── services/       # Single-listener userDocumentSync, repositories, Telegram client, export pipeline
-├── store/          # Typed Zustand stores (auth, workspace, gantt, preferences, toast)
-├── hooks/          # useMediaQuery, useResizablePane, useSyncedScroll, useKeyboardShortcuts
-├── components/
-│   ├── ui/         # Button, Modal, Switch, Badge, BrandLogo, ToastContainer, Skeleton
-│   ├── gantt/      # GanttWorkspace, GanttToolbar, TaskTreePane, TimelineHeader/Grid/Bars, DependencyLayer
-│   ├── modals/     # TaskModal, ShareModal, SettingsModal, DeleteAccountModal, ImportModal, TaskDetailModal
-│   ├── settings/   # TelegramSettingsSection
-│   ├── workspace/  # FloatingActionDock, WorkspaceSelector, WorkspaceCard, ExportMenu
-│   └── layout/     # AppHeader, AppFooter, UserProfilePill, MobileNav, ThemeToggle
-└── pages/          # LandingPage (/), HomePage, WorkspacePage, SharedChartPage, LegalPage
-```
+Licensed under the [Apache License 2.0](./LICENSE).
