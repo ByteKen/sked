@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ArrowLeft,
   ArrowRight,
   CalendarCheck,
   CircleNotch,
@@ -8,6 +10,7 @@ import {
   GlobeHemisphereWest,
   Info,
   ShareNetwork,
+  SignIn,
   Stack,
   WarningCircle,
 } from '@phosphor-icons/react';
@@ -16,6 +19,7 @@ import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { useAuthStore } from '@/store/authStore';
+import { cn } from '@/utils/cn';
 import { FADE_UP_ITEM, SPRING_SNAPPY, STAGGER_CONTAINER, STUDIO_EASE } from '@/utils/motion';
 
 const PREVIEW_LANES = [
@@ -40,6 +44,7 @@ const TRUST_HIGHLIGHTS = [
 
 export function LandingPage() {
   const { login, error, cancelled, loading, clearError } = useAuthStore();
+  const [mobileSignInOnly, setMobileSignInOnly] = useState(false);
 
   const handleGoogleSignIn = async () => {
     clearError();
@@ -50,25 +55,70 @@ export function LandingPage() {
     }
   };
 
+  const handleToggleMobileSignIn = () => {
+    setMobileSignInOnly((prev) => {
+      const next = !prev;
+      if (next && typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="relative min-h-screen flex flex-col studio-atmosphere text-slate-900 dark:text-slate-50 overflow-x-hidden">
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 studio-grain" />
 
       {/* Substantial Studio Top Bar (Single Brand Logo Above the Fold) */}
       <header className="relative z-20 border-b border-slate-200/75 dark:border-white/[0.07] bg-white/75 dark:bg-[#090B10]/75 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 sm:h-[72px] flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 sm:h-[72px] flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileSignInOnly(false)}
+            className={cn(
+              'flex items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl',
+              mobileSignInOnly ? 'cursor-pointer' : 'cursor-default',
+            )}
+          >
             <BrandLogo size="md" />
             <span className="font-mono text-sm sm:text-[15px] font-bold uppercase tracking-[0.22em] text-slate-900 dark:text-slate-100">
               GANTT
             </span>
-          </div>
+          </button>
 
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:inline-flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-500 dark:text-slate-400">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <span className="hidden lg:inline-flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-500 dark:text-slate-400">
               <GlobeHemisphereWest className="w-[18px] h-[18px] text-brand-500" weight="duotone" />
               Open to everyone
             </span>
+
+            {/* Mobile/Tablet Focused Sign-In Toggle */}
+            <motion.button
+              type="button"
+              whileTap={{ scale: 0.96 }}
+              transition={SPRING_SNAPPY}
+              onClick={handleToggleMobileSignIn}
+              aria-pressed={mobileSignInOnly}
+              className={cn(
+                'lg:hidden inline-flex items-center justify-center gap-1.5 h-10 px-3.5 rounded-xl text-xs font-semibold transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                mobileSignInOnly
+                  ? 'border border-slate-200/90 bg-white text-slate-700 hover:bg-slate-50 shadow-surface-sm dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-200 dark:hover:bg-white/[0.09]'
+                  : 'bg-brand-600 hover:bg-brand-500 dark:bg-brand-500 dark:hover:bg-brand-400 text-white shadow-brand-glow-sm',
+              )}
+            >
+              {mobileSignInOnly ? (
+                <>
+                  <ArrowLeft className="w-3.5 h-3.5" weight="bold" />
+                  <span>Back</span>
+                </>
+              ) : (
+                <>
+                  <SignIn className="w-4 h-4" weight="bold" />
+                  <span>Sign in</span>
+                </>
+              )}
+            </motion.button>
+
             <ThemeToggle />
           </div>
         </div>
@@ -76,14 +126,23 @@ export function LandingPage() {
 
       {/* Split-Screen Editorial Landing Hero with Vertical Divider */}
       <main className="relative z-10 flex-1 flex items-center">
-        <div className="max-w-7xl mx-auto w-full px-5 sm:px-8 py-12 lg:py-16">
+        <div
+          className={cn(
+            'max-w-7xl mx-auto w-full px-5 sm:px-8 lg:py-16',
+            mobileSignInOnly ? 'py-8' : 'py-12',
+          )}
+        >
           <div className="grid grid-cols-1 lg:grid-cols-12 items-center gap-10 lg:gap-0">
             {/* Left Side: Editorial Headline + Capabilities + Live Animated Gantt Preview */}
             <motion.div
+              data-testid="landing-overview-panel"
               variants={STAGGER_CONTAINER}
               initial="hidden"
               animate="visible"
-              className="lg:col-span-7 lg:pr-12 xl:pr-16"
+              className={cn(
+                'lg:col-span-7 lg:pr-12 xl:pr-16',
+                mobileSignInOnly && 'hidden lg:block',
+              )}
             >
               <motion.div variants={FADE_UP_ITEM} className="mb-4 inline-flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-brand-500" />
@@ -181,10 +240,16 @@ export function LandingPage() {
 
             {/* Vertical Divider + Right Side Google Sign-In Panel */}
             <motion.div
+              data-testid="landing-signin-panel"
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.12, ease: STUDIO_EASE }}
-              className="lg:col-span-5 pt-10 border-t border-slate-200/80 dark:border-white/[0.08] lg:pt-0 lg:border-t-0 lg:pl-12 xl:pl-16 lg:border-l lg:border-slate-200/85 dark:lg:border-white/[0.08]"
+              className={cn(
+                'lg:col-span-5 lg:pt-0 lg:border-t-0 lg:pl-12 xl:pl-16 lg:border-l lg:border-slate-200/85 dark:lg:border-white/[0.08]',
+                mobileSignInOnly
+                  ? 'pt-0 border-t-0'
+                  : 'pt-10 border-t border-slate-200/80 dark:border-white/[0.08]',
+              )}
             >
               <div className="w-full max-w-md mx-auto rounded-2xl border border-slate-200/90 dark:border-white/[0.1] bg-white/95 dark:bg-surface-dark/95 backdrop-blur-md shadow-surface-lg dark:shadow-dark-lg p-7 sm:p-9">
                 <div className="inline-flex items-center gap-2 mb-4">
@@ -329,7 +394,9 @@ export function LandingPage() {
         </div>
       </main>
 
-      <AppFooter />
+      <div data-testid="landing-footer-wrap" className={cn(mobileSignInOnly && 'hidden lg:block')}>
+        <AppFooter />
+      </div>
     </div>
   );
 }

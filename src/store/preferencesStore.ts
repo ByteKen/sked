@@ -31,6 +31,10 @@ export function applyThemeToDocument(theme: ThemeMode): void {
   if (typeof document !== 'undefined') {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     document.documentElement.style.colorScheme = theme;
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', theme === 'dark' ? '#090B10' : '#F6F7FB');
+    }
   }
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme);

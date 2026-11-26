@@ -45,7 +45,7 @@ export const DEFAULT_REMINDER_OFFSETS: number[] = [5, 3, 1, 0];
 
 export const DEFAULT_PREFERENCES: UserPreferences = {
   useRoundedSubtasks: false,
-  theme: 'dark',
+  theme: 'light',
   exportTheme: 'light',
   taskLabelPosition: 'inside',
   subtaskLabelPosition: 'outside',
