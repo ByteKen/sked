@@ -285,10 +285,8 @@ export function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.45, delay: 0.12, ease: STUDIO_EASE }}
               className={cn(
-                'lg:col-span-5 lg:pt-0 lg:border-t-0 lg:pl-12 xl:pl-16 lg:border-l lg:border-slate-200/85 dark:lg:border-white/[0.08]',
-                mobileSignInOnly
-                  ? 'pt-0 border-t-0'
-                  : 'pt-10 border-t border-slate-200/80 dark:border-white/[0.08]',
+                'lg:col-span-5 lg:pl-12 xl:pl-16 lg:border-l lg:border-slate-200/85 dark:lg:border-white/[0.08]',
+                mobileSignInOnly ? 'block' : 'hidden lg:block',
               )}
             >
               <div className="w-full max-w-md mx-auto rounded-2xl border border-slate-200/90 dark:border-white/[0.1] bg-white/95 dark:bg-surface-dark/95 backdrop-blur-md shadow-surface-lg dark:shadow-dark-lg p-7 sm:p-9">

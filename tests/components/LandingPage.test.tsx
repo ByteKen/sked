@@ -36,7 +36,7 @@ describe('LandingPage mobile sign-in toggle & default theme', () => {
     ).toBeInTheDocument();
   });
 
-  it('hides editorial overview and footer on mobile when clicking topbar Sign in and restores them on Back', () => {
+  it('hides the sign-in card on mobile until topbar Sign in is clicked, then swaps back cleanly on Back', () => {
     render(
       <MemoryRouter>
         <LandingPage />
@@ -48,20 +48,25 @@ describe('LandingPage mobile sign-in toggle & default theme', () => {
     const signInPanel = screen.getByTestId('landing-signin-panel');
     const footerWrap = screen.getByTestId('landing-footer-wrap');
 
+    // Default mobile state: editorial overview + footer shown, sign-in card hidden below lg
     expect(overviewPanel.className).not.toContain('hidden');
     expect(footerWrap.className).not.toContain('hidden');
-    expect(signInPanel).toBeInTheDocument();
+    expect(signInPanel.className).toContain('hidden lg:block');
 
+    // Click topbar Sign in -> hides overview & footer on mobile, reveals sign-in card
     fireEvent.click(signInToggle);
 
     expect(overviewPanel.className).toContain('hidden lg:block');
     expect(footerWrap.className).toContain('hidden lg:block');
+    expect(signInPanel.className).not.toContain('hidden');
     expect(screen.getByText(/sign in to your/i)).toBeInTheDocument();
 
+    // Click Back -> restores overview & footer, hides sign-in card again on mobile
     const backButton = screen.getByRole('button', { name: /^back$/i });
     fireEvent.click(backButton);
 
     expect(overviewPanel.className).not.toContain('hidden');
     expect(footerWrap.className).not.toContain('hidden');
+    expect(signInPanel.className).toContain('hidden lg:block');
   });
 });
