@@ -11,6 +11,7 @@ export interface ModalProps {
   title: string;
   description?: string;
   icon?: ReactNode;
+  subHeader?: ReactNode;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   footer?: ReactNode;
   children: ReactNode;
@@ -30,6 +31,7 @@ export function Modal({
   title,
   description,
   icon,
+  subHeader,
   maxWidth = 'md',
   footer,
   children,
@@ -107,6 +109,13 @@ export function Modal({
                 <X className="w-[18px] h-[18px]" weight="bold" />
               </button>
             </div>
+
+            {/* Optional Pinned Sub-Header (e.g. Tabs) */}
+            {subHeader && (
+              <div className="px-6 sm:px-7 py-2.5 border-b border-slate-200/80 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.02] shrink-0">
+                {subHeader}
+              </div>
+            )}
 
             {/* Body */}
             <div className="overflow-y-auto flex-1">{children}</div>

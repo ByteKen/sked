@@ -3,6 +3,7 @@ import { subscribeWithSelector } from 'zustand/middleware';
 import { auth } from '@/config/firebase';
 import { userDocumentSync } from '@/services/userDocumentSync';
 import { savePreferencesInFirestore } from '@/services/userRepository';
+import { useAuthStore } from '@/store/authStore';
 import {
   DEFAULT_PREFERENCES,
   type BarHeightMode,
@@ -113,6 +114,13 @@ export const usePreferencesStore = create<PreferencesStoreState>()(
 
       const unsubscribe = userDocumentSync.subscribe(
         (snapshot) => {
+          const customDisplayName = (
+            snapshot.data?.profile as { displayName?: string } | undefined
+          )?.displayName?.trim();
+          if (customDisplayName) {
+            useAuthStore.getState().setDisplayNameLocally(customDisplayName);
+          }
+
           const prefs = (snapshot.data?.preferences ?? {}) as Partial<UserPreferences>;
           const merged: UserPreferences = {
             useRoundedSubtasks: prefs.useRoundedSubtasks ?? DEFAULT_PREFERENCES.useRoundedSubtasks,

@@ -162,6 +162,7 @@ export async function deleteOrphanedShareDoc(shareId: string | null | undefined)
 
 export interface SharedChartSyncPatch {
   title?: string;
+  ownerName?: string;
   tasks?: readonly Task[];
   preferences?: SharedChartViewPrefs;
 }
@@ -181,6 +182,9 @@ export async function syncSharedChart(
   if (patch.title !== undefined) {
     payload.title = patch.title;
   }
+  if (patch.ownerName !== undefined) {
+    payload.ownerName = patch.ownerName;
+  }
   if (patch.tasks !== undefined) {
     payload.tasks = sanitizeTaskTree(patch.tasks);
   }
@@ -193,6 +197,19 @@ export async function syncSharedChart(
   } catch (err) {
     console.warn('Live share sync skipped:', err);
   }
+}
+
+/**
+ * Propagates an updated owner display name across all active shared Gantt charts.
+ */
+export async function syncOwnerNameAcrossSharedCharts(
+  shareIds: readonly string[],
+  ownerName: string,
+): Promise<void> {
+  if (shareIds.length === 0) return;
+  await Promise.allSettled(
+    shareIds.map((shareId) => syncSharedChart(shareId, { ownerName })),
+  );
 }
 
 export function subscribeToSharedChart(

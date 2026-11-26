@@ -136,6 +136,23 @@ export async function saveWorkspaceTasksInFirestore(
   );
 }
 
+export async function saveDisplayNameInFirestore(
+  uid: string,
+  displayName: string,
+): Promise<void> {
+  const userDocRef = doc(db, 'users', uid);
+  await setDoc(
+    userDocRef,
+    {
+      profile: {
+        displayName: displayName.trim(),
+      },
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+}
+
 export async function savePreferencesInFirestore(
   uid: string,
   preferences: UserPreferences,

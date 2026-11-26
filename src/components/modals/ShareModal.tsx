@@ -121,9 +121,9 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
         </div>
       }
       footer={
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            Viewers can also duplicate a copy to their workspace.
+            Shared as <strong className="font-semibold text-slate-700 dark:text-slate-200">{ownerName}</strong> · edit in Settings → Profile
           </span>
           <Button variant="primary" size="md" onClick={onClose}>
             Done

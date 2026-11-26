@@ -15,6 +15,14 @@ export interface ImportValidationError {
   line?: number | null;
 }
 
+export function validateDisplayName(rawName: string): string | null {
+  const trimmed = rawName.trim();
+  if (!trimmed) return 'Please enter a display name';
+  if (trimmed.length < 2) return 'Display name must be at least 2 characters';
+  if (trimmed.length > 60) return 'Display name must be 60 characters or fewer';
+  return null;
+}
+
 export function validateWorkspaceName(
   rawName: string,
   existingWorkspaces: readonly Workspace[],

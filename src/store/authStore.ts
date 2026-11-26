@@ -4,19 +4,29 @@ import {
   reauthenticateWithPopup,
   signInWithPopup,
   signOut,
+  updateProfile,
   type User,
 } from 'firebase/auth';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { auth, googleProvider } from '@/config/firebase';
+import { validateDisplayName } from '@/domain/validation';
+import { syncOwnerNameAcrossSharedCharts } from '@/services/shareRepository';
 import { disconnectTelegram } from '@/services/telegramService';
 import { userDocumentSync } from '@/services/userDocumentSync';
-import { deleteUserAccountData } from '@/services/userRepository';
-import type { AuthUser } from '@/types';
+import { deleteUserAccountData, saveDisplayNameInFirestore } from '@/services/userRepository';
+import type { AuthUser, WorkspaceMap } from '@/types';
 
 export interface DeleteAccountResult {
   ok: boolean;
   cancelled?: boolean;
+  error?: string;
+}
+
+export interface UpdateDisplayNameResult {
+  ok: boolean;
+  name?: string;
+  syncedSharesCount?: number;
   error?: string;
 }
 
@@ -29,6 +39,8 @@ interface AuthStoreState {
   initAuth: () => () => void;
   login: () => Promise<User | null>;
   logout: () => Promise<void>;
+  setDisplayNameLocally: (name: string) => void;
+  updateDisplayName: (rawName: string) => Promise<UpdateDisplayNameResult>;
   deleteAccount: () => Promise<DeleteAccountResult>;
   clearError: () => void;
 }
@@ -114,6 +126,59 @@ export const useAuthStore = create<AuthStoreState>()(
       } catch (err) {
         console.error('Logout error:', err);
         set({ error: 'Failed to sign out. Please try again.' });
+      }
+    },
+
+    setDisplayNameLocally: (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      set((state) => {
+        if (!state.user || state.user.name === trimmed) return state;
+        return {
+          user: {
+            ...state.user,
+            name: trimmed,
+          },
+        };
+      });
+    },
+
+    updateDisplayName: async (rawName) => {
+      const validationError = validateDisplayName(rawName);
+      if (validationError) {
+        return { ok: false, error: validationError };
+      }
+
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        return { ok: false, error: 'You must be signed in to update your display name.' };
+      }
+
+      const trimmed = rawName.trim();
+      try {
+        await saveDisplayNameInFirestore(currentUser.uid, trimmed);
+        await updateProfile(currentUser, { displayName: trimmed }).catch(() => {});
+
+        const snap = userDocumentSync.getLatestSnapshot();
+        const workspaces = (snap?.data?.workspaces ?? {}) as WorkspaceMap;
+        const activeShareIds = Object.values(workspaces)
+          .filter((ws): ws is WorkspaceMap[string] & { shareId: string } =>
+            Boolean(ws?.isShared && ws.shareId),
+          )
+          .map((ws) => ws.shareId);
+
+        if (activeShareIds.length > 0) {
+          await syncOwnerNameAcrossSharedCharts(activeShareIds, trimmed);
+        }
+
+        set((state) =>
+          state.user ? { user: { ...state.user, name: trimmed } } : state,
+        );
+
+        return { ok: true, name: trimmed, syncedSharesCount: activeShareIds.length };
+      } catch (err) {
+        console.error('Failed to update display name:', err);
+        return { ok: false, error: 'Could not save your display name. Please try again.' };
       }
     },
 
