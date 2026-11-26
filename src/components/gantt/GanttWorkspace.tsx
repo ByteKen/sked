@@ -487,6 +487,9 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
               readOnly={readOnly}
               isExpandedView={isExpandedView}
               fullWidth={isMobile && mobileView === 'list'}
+              hasCollapsibleParents={parentIds.length > 0}
+              allCollapsed={allCollapsed}
+              onToggleCollapseAll={handleToggleCollapseAll}
               onScroll={handleLeftScroll}
               onClaimScroll={claimLeft}
               onSelectTask={handleSelectTask}

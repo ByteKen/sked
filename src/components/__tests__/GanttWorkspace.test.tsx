@@ -186,4 +186,58 @@ describe('GanttWorkspace unified split-pane alignment', () => {
 
     expect(zoomIndicator).toHaveTextContent('250%');
   });
+
+  it('shows a Collapse all / Expand all button in the mobile Tasks tab header and toggles all groups', async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      const user = userEvent.setup();
+      render(
+        <GanttWorkspace
+          tasks={tasksFixture}
+          selectedTaskId={null}
+          onSelectTask={vi.fn()}
+          onTaskActivate={vi.fn()}
+          mobileView="list"
+          readOnly
+        />,
+      );
+
+      expect(screen.getByText('3 rows')).toBeInTheDocument();
+      const collapseButtons = screen.getAllByRole('button', { name: /collapse all groups/i });
+      // The mobile Tasks tab header renders a dedicated visible Collapse all pill
+      const mobileHeaderBtn = collapseButtons.find((btn) => btn.textContent?.includes('Collapse all'));
+      expect(mobileHeaderBtn).toBeDefined();
+
+      await user.click(mobileHeaderBtn!);
+      expect(screen.getByText('1 rows')).toBeInTheDocument();
+      expect(screen.queryByText('Setup Repository')).not.toBeInTheDocument();
+
+      const expandButtons = screen.getAllByRole('button', { name: /expand all groups/i });
+      const mobileExpandBtn = expandButtons.find((btn) => btn.textContent?.includes('Expand all'));
+      expect(mobileExpandBtn).toBeDefined();
+
+      await user.click(mobileExpandBtn!);
+      expect(screen.getByText('3 rows')).toBeInTheDocument();
+      expect(screen.getByText('Setup Repository')).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });
