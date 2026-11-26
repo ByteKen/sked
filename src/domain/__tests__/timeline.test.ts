@@ -3,10 +3,15 @@ import {
   buildTimelineColumns,
   calculateTaskBarGeometry,
   calculateTimelineRange,
+  clampTimelineZoom,
+  computeAnchoredScrollLeft,
+  computeWheelZoom,
   daysBetween,
   getPixelsPerDay,
   getWeekNumber,
   isLeapYear,
+  MAX_TIMELINE_ZOOM,
+  MIN_TIMELINE_ZOOM,
   parseISODate,
 } from '@/domain/timeline';
 import type { TimelineGranularity } from '@/types';
@@ -60,5 +65,28 @@ describe('timeline domain math', () => {
     expect(geom.durationDays).toBe(5);
     expect(geom.left).toBe(200);
     expect(geom.width).toBe(200);
+  });
+
+  it('computes smooth clamped wheel zoom and preserves anchor scroll position', () => {
+    const zoomedIn = computeWheelZoom(1, -100);
+    expect(zoomedIn).toBeGreaterThan(1);
+    expect(zoomedIn).toBeLessThanOrEqual(MAX_TIMELINE_ZOOM);
+
+    const zoomedOut = computeWheelZoom(1, 100);
+    expect(zoomedOut).toBeLessThan(1);
+    expect(zoomedOut).toBeGreaterThanOrEqual(MIN_TIMELINE_ZOOM);
+
+    expect(clampTimelineZoom(99)).toBe(MAX_TIMELINE_ZOOM);
+    expect(clampTimelineZoom(0.01)).toBe(MIN_TIMELINE_ZOOM);
+
+    // Date at contentX = 400 + 200 = 600 at 1x moves to 1200 at 2x -> scrollLeft = 1000 keeps it at 200px
+    expect(
+      computeAnchoredScrollLeft({
+        prevScrollLeft: 400,
+        prevZoom: 1,
+        nextZoom: 2,
+        anchorOffsetPx: 200,
+      }),
+    ).toBe(1000);
   });
 });

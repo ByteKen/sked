@@ -213,7 +213,7 @@ export const GanttToolbar = memo(function GanttToolbar({
               onClick={onZoomOut}
               disabled={zoom <= 0.5}
               aria-label="Zoom out"
-              title="Zoom out (-)"
+              title="Zoom out (- or Ctrl+Scroll)"
               className="p-1.5 rounded-md text-slate-600 hover:text-brand-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-brand-400 dark:hover:bg-white/[0.08] disabled:opacity-40 transition-colors cursor-pointer"
             >
               <MagnifyingGlassMinus weight="duotone" className="w-3.5 h-3.5" />
@@ -231,7 +231,7 @@ export const GanttToolbar = memo(function GanttToolbar({
               onClick={onZoomIn}
               disabled={zoom >= 3}
               aria-label="Zoom in"
-              title="Zoom in (+)"
+              title="Zoom in (+ or Ctrl+Scroll)"
               className="p-1.5 rounded-md text-slate-600 hover:text-brand-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-brand-400 dark:hover:bg-white/[0.08] disabled:opacity-40 transition-colors cursor-pointer"
             >
               <MagnifyingGlassPlus weight="duotone" className="w-3.5 h-3.5" />

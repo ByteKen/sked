@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,8 @@ import {
   calculateTaskBarGeometry,
   calculateTimelineRange,
   calculateTodayOffsetPx,
+  clampTimelineZoom,
+  computeAnchoredScrollLeft,
   getDisplayDays,
   getPixelsPerDay,
   getTodayLocal,
@@ -21,6 +24,7 @@ import {
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useResizablePane } from '@/hooks/useResizablePane';
 import { useSyncedScroll } from '@/hooks/useSyncedScroll';
+import { useTimelineZoomGestures } from '@/hooks/useTimelineZoomGestures';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type {
@@ -328,15 +332,57 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       return offset;
     }, [range.startDate, pixelsPerDay, totalWidth]);
 
+    const pendingZoomAnchorRef = useRef<{
+      prevScrollLeft: number;
+      prevZoom: number;
+      anchorOffsetPx: number;
+    } | null>(null);
+
+    const applyZoomAtAnchor = useCallback(
+      (rawNextZoom: number, anchorOffsetPx?: number) => {
+        const nextZoom = clampTimelineZoom(rawNextZoom);
+        setZoom((prevZoom) => {
+          if (Math.abs(nextZoom - prevZoom) < 0.005) return prevZoom;
+          const container = rightRef.current;
+          if (container && !pendingZoomAnchorRef.current) {
+            pendingZoomAnchorRef.current = {
+              prevScrollLeft: container.scrollLeft,
+              prevZoom,
+              anchorOffsetPx:
+                anchorOffsetPx !== undefined ? anchorOffsetPx : container.clientWidth / 2,
+            };
+          }
+          return nextZoom;
+        });
+      },
+      [rightRef],
+    );
+
+    useLayoutEffect(() => {
+      const pending = pendingZoomAnchorRef.current;
+      const container = rightRef.current;
+      if (!pending || !container) return;
+      pendingZoomAnchorRef.current = null;
+
+      container.scrollLeft = computeAnchoredScrollLeft({
+        prevScrollLeft: pending.prevScrollLeft,
+        prevZoom: pending.prevZoom,
+        nextZoom: zoom,
+        anchorOffsetPx: pending.anchorOffsetPx,
+      });
+    }, [zoom, rightRef]);
+
     const handleZoomIn = useCallback(() => {
-      setZoom((z) => Math.min(3, Math.round((z + 0.25) * 100) / 100));
-    }, []);
+      applyZoomAtAnchor(zoom + 0.25);
+    }, [applyZoomAtAnchor, zoom]);
 
     const handleZoomOut = useCallback(() => {
-      setZoom((z) => Math.max(0.5, Math.round((z - 0.25) * 100) / 100));
-    }, []);
+      applyZoomAtAnchor(zoom - 0.25);
+    }, [applyZoomAtAnchor, zoom]);
 
-    const handleResetZoom = useCallback(() => setZoom(1), []);
+    const handleResetZoom = useCallback(() => {
+      applyZoomAtAnchor(1);
+    }, [applyZoomAtAnchor]);
 
     const handleScrollToToday = useCallback(() => {
       const container = rightRef.current;
@@ -374,6 +420,13 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
 
     const showTreePane = !isMobile || mobileView === 'list';
     const showTimelinePane = !isMobile || mobileView === 'chart';
+
+    useTimelineZoomGestures({
+      containerRef: rightRef,
+      zoom,
+      active: showTimelinePane,
+      onZoomAtAnchor: applyZoomAtAnchor,
+    });
 
     return (
       <div
@@ -458,10 +511,12 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
           {showTimelinePane && (
             <div
               ref={rightRef}
+              data-testid="timeline-viewport"
               onScroll={handleRightScroll}
               onWheel={claimRight}
               onTouchStart={claimRight}
               onPointerDown={claimRight}
+              style={{ touchAction: 'pan-x pan-y' }}
               className={cn(
                 'flex-1 min-w-0 bg-white dark:bg-canvas-dark overscroll-contain [overflow-anchor:none]',
                 isExpandedView ? '' : 'overflow-auto',

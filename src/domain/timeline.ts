@@ -1,6 +1,48 @@
 import type { FlatTask, Task, TimelineGranularity } from '@/types';
 
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
+export const MIN_TIMELINE_ZOOM = 0.5;
+export const MAX_TIMELINE_ZOOM = 3;
+
+export function clampTimelineZoom(zoom: number): number {
+  if (!Number.isFinite(zoom)) return 1;
+  const clamped = Math.max(MIN_TIMELINE_ZOOM, Math.min(MAX_TIMELINE_ZOOM, zoom));
+  return Math.round(clamped * 100) / 100;
+}
+
+/**
+ * Computes the next zoom factor from a Ctrl/Cmd + Wheel or trackpad pinch delta.
+ * Uses smooth exponential scaling so both trackpad pinches (small deltas) and
+ * discrete mouse wheel notches (±100) feel symmetrical and natural.
+ */
+export function computeWheelZoom(
+  currentZoom: number,
+  deltaY: number,
+  deltaMode = 0,
+): number {
+  if (!Number.isFinite(deltaY) || deltaY === 0) return clampTimelineZoom(currentZoom);
+  const pixelDelta = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+  const clampedDelta = Math.max(-160, Math.min(160, pixelDelta));
+  const scaleFactor = Math.exp(-clampedDelta * 0.0022);
+  return clampTimelineZoom(currentZoom * scaleFactor);
+}
+
+/**
+ * Keeps the exact timeline date under `anchorOffsetPx` (mouse cursor or pinch midpoint)
+ * pinned to the same screen position as zoom changes.
+ */
+export function computeAnchoredScrollLeft(params: {
+  prevScrollLeft: number;
+  prevZoom: number;
+  nextZoom: number;
+  anchorOffsetPx: number;
+}): number {
+  const { prevScrollLeft, prevZoom, nextZoom, anchorOffsetPx } = params;
+  if (prevZoom <= 0 || nextZoom <= 0) return Math.max(0, prevScrollLeft);
+  const contentAnchorX = prevScrollLeft + anchorOffsetPx;
+  const scaledAnchorX = contentAnchorX * (nextZoom / prevZoom);
+  return Math.max(0, scaledAnchorX - anchorOffsetPx);
+}
 
 export interface TimelineRange {
   startDate: Date;
@@ -419,5 +461,8 @@ export function calculateAutoFitZoom(
   const basePixelsPerDay = getPixelsPerDay(granularity, 1);
   const neededWidthAtZoom1 = spanDays * basePixelsPerDay;
   const rawZoom = availableWidthPx / neededWidthAtZoom1;
-  return Math.max(0.5, Math.min(3, Math.round(rawZoom * 20) / 20));
+  return Math.max(
+    MIN_TIMELINE_ZOOM,
+    Math.min(MAX_TIMELINE_ZOOM, Math.round(rawZoom * 20) / 20),
+  );
 }

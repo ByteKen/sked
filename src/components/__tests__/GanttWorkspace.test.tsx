@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GanttWorkspace } from '@/components/gantt/GanttWorkspace';
 import type { Task } from '@/types';
@@ -121,5 +121,56 @@ describe('GanttWorkspace unified split-pane alignment', () => {
     expect(
       screen.queryByText('Initialize TypeScript workspace and CI checks'),
     ).not.toBeInTheDocument();
+  });
+
+  it('zooms the timeline with Ctrl+Wheel and two-finger touch pinch without affecting plain scrolling', () => {
+    render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        readOnly
+      />,
+    );
+
+    const viewport = screen.getByTestId('timeline-viewport');
+    const zoomIndicator = screen.getByTitle('Reset zoom to 100%');
+    expect(zoomIndicator).toHaveTextContent('100%');
+
+    // Plain scroll (no Ctrl/Cmd) must NOT change zoom
+    fireEvent.wheel(viewport, { deltaY: -100, ctrlKey: false });
+    expect(zoomIndicator).toHaveTextContent('100%');
+
+    // Ctrl + Wheel up zooms in and prevents browser page zoom
+    const wheelInEvent = new WheelEvent('wheel', {
+      deltaY: -100,
+      ctrlKey: true,
+      clientX: 200,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      viewport.dispatchEvent(wheelInEvent);
+    });
+    expect(wheelInEvent.defaultPrevented).toBe(true);
+    expect(zoomIndicator).toHaveTextContent('125%');
+
+    // Two-finger mobile pinch spread (100px -> 200px) doubles current zoom (1.25 -> 2.5 = 250%)
+    fireEvent.touchStart(viewport, {
+      touches: [
+        { clientX: 100, clientY: 100 },
+        { clientX: 200, clientY: 100 },
+      ],
+    });
+    fireEvent.touchMove(viewport, {
+      touches: [
+        { clientX: 50, clientY: 100 },
+        { clientX: 250, clientY: 100 },
+      ],
+    });
+    fireEvent.touchEnd(viewport, { touches: [] });
+
+    expect(zoomIndicator).toHaveTextContent('250%');
   });
 });
