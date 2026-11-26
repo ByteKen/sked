@@ -44,17 +44,30 @@ export function useTimelineZoomGestures({
     let pinchStartZoom = zoomRef.current;
 
     const handleWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
-      if (e.deltaY === 0) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.deltaY === 0) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+        e.preventDefault();
+        e.stopPropagation();
 
-      const rect = container.getBoundingClientRect();
-      const anchorOffsetPx = Math.max(0, e.clientX - rect.left);
-      const nextZoom = computeWheelZoom(zoomRef.current, e.deltaY, e.deltaMode);
-      zoomRef.current = nextZoom;
-      onZoomAtAnchorRef.current(nextZoom, anchorOffsetPx);
+        const rect = container.getBoundingClientRect();
+        const anchorOffsetPx = Math.max(0, e.clientX - rect.left);
+        const nextZoom = computeWheelZoom(zoomRef.current, e.deltaY, e.deltaMode);
+        zoomRef.current = nextZoom;
+        onZoomAtAnchorRef.current(nextZoom, anchorOffsetPx);
+        return;
+      }
+
+      // Shift + Scroll -> smooth horizontal timeline pan across Windows & macOS
+      if (e.shiftKey) {
+        const rawDelta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+        if (rawDelta === 0) return;
+
+        e.preventDefault();
+        const pixelDelta =
+          e.deltaMode === 1 ? rawDelta * 16 : e.deltaMode === 2 ? rawDelta * 400 : rawDelta;
+        container.scrollLeft = Math.max(0, container.scrollLeft + pixelDelta);
+      }
     };
 
     const handleTouchStart = (e: TouchEvent) => {

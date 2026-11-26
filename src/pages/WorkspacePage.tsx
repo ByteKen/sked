@@ -204,6 +204,8 @@ export function WorkspacePage() {
     onNewTask: handleOpenNewTask,
     onZoomIn: () => ganttRef.current?.zoomIn(),
     onZoomOut: () => ganttRef.current?.zoomOut(),
+    onResetZoom: () => ganttRef.current?.resetZoom(),
+    onAutoFit: () => ganttRef.current?.autoFit(),
     onGoToToday: () => ganttRef.current?.scrollToToday(),
   });
 

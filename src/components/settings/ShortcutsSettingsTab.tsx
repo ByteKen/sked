@@ -23,6 +23,21 @@ const KEYBOARD_SHORTCUTS: ShortcutRow[] = [
     keys: ['T'],
   },
   {
+    label: 'Auto-fit timeline',
+    description: 'Fit the full project date range into the current viewport',
+    keys: ['F'],
+  },
+  {
+    label: 'Reset zoom to 100%',
+    description: 'Restore timeline zoom back to the default 100% scale',
+    keys: ['0'],
+  },
+  {
+    label: 'Step zoom in / out',
+    description: 'Adjust timeline zoom in 25% increments',
+    keys: ['+', '-'],
+  },
+  {
     label: 'Close modal or menu',
     description: 'Dismiss any active dialog or dropdown popover',
     keys: ['Esc'],
@@ -30,6 +45,11 @@ const KEYBOARD_SHORTCUTS: ShortcutRow[] = [
 ];
 
 const TIMELINE_GESTURES: ShortcutRow[] = [
+  {
+    label: 'Horizontal timeline scroll',
+    description: 'Scroll left and right across dates with a mouse wheel',
+    keys: ['Shift', 'Scroll'],
+  },
   {
     label: 'Cursor-anchored zoom',
     description: 'Zoom smoothly around your mouse pointer or trackpad pinch',
@@ -39,11 +59,6 @@ const TIMELINE_GESTURES: ShortcutRow[] = [
     label: 'Mobile pinch-to-zoom',
     description: 'Pinch or spread two fingers directly on the timeline',
     keys: ['2-Finger Pinch'],
-  },
-  {
-    label: 'Step zoom in / out',
-    description: 'Adjust timeline zoom in 25% increments',
-    keys: ['+', '-'],
   },
   {
     label: 'Resize task panel',

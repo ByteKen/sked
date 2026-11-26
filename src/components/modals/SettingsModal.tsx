@@ -93,7 +93,7 @@ interface TabDefinition {
   badgeDot?: boolean;
 }
 
-export function SettingsModal({ isOpen, onClose, initialTab = 'display' }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, initialTab = 'profile' }: SettingsModalProps) {
   if (!isOpen) return null;
   return <SettingsModalContent isOpen={isOpen} onClose={onClose} initialTab={initialTab} />;
 }
@@ -101,7 +101,7 @@ export function SettingsModal({ isOpen, onClose, initialTab = 'display' }: Setti
 function SettingsModalContent({
   isOpen,
   onClose,
-  initialTab = 'display',
+  initialTab = 'profile',
 }: SettingsModalProps) {
   const {
     useRoundedSubtasks,
@@ -137,23 +137,24 @@ function SettingsModalContent({
 
   const telegramActive = Boolean(telegram?.connected && telegram.enabled);
   const tabs = useMemo<TabDefinition[]>(() => {
-    const base: TabDefinition[] = [
+    const ordered: TabDefinition[] = [];
+    if (user) {
+      ordered.push({ id: 'profile', label: 'Profile', icon: UserCircle });
+    }
+    ordered.push(
       { id: 'display', label: 'Display', icon: SlidersHorizontal },
       { id: 'export', label: 'Export', icon: Printer },
-    ];
+    );
     if (user) {
-      base.push({
+      ordered.push({
         id: 'notifications',
         label: 'Alerts',
         icon: BellRinging,
         badgeDot: telegramActive,
       });
     }
-    base.push({ id: 'shortcuts', label: 'Shortcuts', icon: Keyboard });
-    if (user) {
-      base.push({ id: 'profile', label: 'Profile', icon: UserCircle });
-    }
-    return base;
+    ordered.push({ id: 'shortcuts', label: 'Shortcuts', icon: Keyboard });
+    return ordered;
   }, [user, telegramActive]);
 
   const resolvedTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'display';

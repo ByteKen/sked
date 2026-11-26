@@ -52,6 +52,7 @@ export interface GanttWorkspaceHandle {
   autoFit: () => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  resetZoom: () => void;
 }
 
 export interface GanttWorkspaceProps {
@@ -414,8 +415,16 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
         autoFit: handleAutoFit,
         zoomIn: handleZoomIn,
         zoomOut: handleZoomOut,
+        resetZoom: handleResetZoom,
       }),
-      [granularity, handleScrollToToday, handleAutoFit, handleZoomIn, handleZoomOut],
+      [
+        granularity,
+        handleScrollToToday,
+        handleAutoFit,
+        handleZoomIn,
+        handleZoomOut,
+        handleResetZoom,
+      ],
     );
 
     const showTreePane = !isMobile || mobileView === 'list';

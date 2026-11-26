@@ -142,6 +142,19 @@ describe('GanttWorkspace unified split-pane alignment', () => {
     fireEvent.wheel(viewport, { deltaY: -100, ctrlKey: false });
     expect(zoomIndicator).toHaveTextContent('100%');
 
+    // Shift + Wheel scrolls horizontally without changing zoom
+    viewport.scrollLeft = 50;
+    const shiftWheelEvent = new WheelEvent('wheel', {
+      deltaY: 120,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    viewport.dispatchEvent(shiftWheelEvent);
+    expect(shiftWheelEvent.defaultPrevented).toBe(true);
+    expect(viewport.scrollLeft).toBe(170);
+    expect(zoomIndicator).toHaveTextContent('100%');
+
     // Ctrl + Wheel up zooms in and prevents browser page zoom
     const wheelInEvent = new WheelEvent('wheel', {
       deltaY: -100,

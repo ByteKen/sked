@@ -6,6 +6,8 @@ interface ShortcutHandlers {
   onNewTask?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
+  onResetZoom?: () => void;
+  onAutoFit?: () => void;
   onGoToToday?: () => void;
 }
 
@@ -21,6 +23,8 @@ export function useKeyboardShortcuts({
   onNewTask,
   onZoomIn,
   onZoomOut,
+  onResetZoom,
+  onAutoFit,
   onGoToToday,
 }: ShortcutHandlers): void {
   useEffect(() => {
@@ -42,6 +46,12 @@ export function useKeyboardShortcuts({
       } else if (event.key === '-' && onZoomOut) {
         event.preventDefault();
         onZoomOut();
+      } else if (event.key === '0' && onResetZoom) {
+        event.preventDefault();
+        onResetZoom();
+      } else if ((event.key === 'f' || event.key === 'F') && onAutoFit) {
+        event.preventDefault();
+        onAutoFit();
       } else if ((event.key === 't' || event.key === 'T') && onGoToToday) {
         event.preventDefault();
         onGoToToday();
@@ -50,5 +60,5 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, onFocusSearch, onNewTask, onZoomIn, onZoomOut, onGoToToday]);
+  }, [enabled, onFocusSearch, onNewTask, onZoomIn, onZoomOut, onResetZoom, onAutoFit, onGoToToday]);
 }
