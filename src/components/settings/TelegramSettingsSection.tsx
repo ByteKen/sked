@@ -196,7 +196,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-          Telegram Deadline Alerts
+          Telegram Bot &amp; Alerts
         </h3>
         {telegram?.connected && (
           <Badge variant={telegram.enabled ? 'emerald' : 'neutral'}>
@@ -223,7 +223,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Upcoming Deadline Reminders via Telegram
+                  Telegram Bot &amp; Deadline Alerts
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
                   Get timezone-aware deadline reminders and manage tasks right from Telegram with{' '}

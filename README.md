@@ -35,9 +35,9 @@ Gantt is a browser-based project timeline app for planning schedules, tracking s
 - **Flexible Timeline Views:** Switch between Days, Weeks, Months, Quarters, and Years, with `Ctrl + Scroll` zoom, `Shift + Scroll` panning, and mobile pinch-to-zoom.
 - **Multi-Workspace Cloud Sync:** Manage multiple projects synced in real time through Firebase Cloud Firestore.
 - **Live Shareable Links:** Publish read-only `/share/:shareId` links with live updates, custom "Shared by" profile names, and one-click duplication.
-- **Telegram Deadline Alerts:** Connect Telegram in one tap for timezone-aware reminders, overdue digests, and bot commands (`/upcoming`, `/pause`, `/resume`, `/stop`).
+- **Telegram Bot & Deadline Alerts:** Connect Telegram in one tap for timezone-aware reminders, interactive task browsing (`/tasks`, `/today`, `/upcoming`, `/summary`), and one-tap Mark Done or progress updates synced live to your chart.
 - **Multi-Page Exports & JSON Import:** Export balanced multi-page PDFs, crisp 2x PNG images, CSV, or JSON, and import `.json` backups with validation.
-- **Light & Dark Themes:** Daylight and dark interfaces with tabbed settings for Profile, Display, Export, Alerts, and Shortcuts.
+- **Light & Dark Themes:** Daylight and dark interfaces with tabbed settings for Profile, Display, Export, Bot & Alerts, and Shortcuts.
 - **Full Account Control:** Export your data or permanently delete your account, workspaces, public links, and Telegram link anytime from `Settings -> Profile`.
 
 ## Get started

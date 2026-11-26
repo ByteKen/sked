@@ -148,7 +148,7 @@ function SettingsModalContent({
     if (user) {
       ordered.push({
         id: 'notifications',
-        label: 'Alerts',
+        label: 'Bot & Alerts',
         icon: BellRinging,
         badgeDot: telegramActive,
       });

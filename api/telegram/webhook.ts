@@ -140,7 +140,7 @@ async function handleCallbackQuery(
   if (!subDoc) {
     await answerTelegramCallbackQuery(
       cb.id,
-      'Your Telegram chat is not linked to Gantt. Connect from Settings -> Alerts.',
+      'Your Telegram chat is not linked to Gantt. Connect from Settings -> Bot & Alerts.',
       true,
     );
     return;
@@ -379,7 +379,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           [
             '<b>👋 Welcome to Gantt Bot</b>',
             '',
-            'To connect your account, open <b>Settings → Alerts</b> in Gantt and click <b>Connect Telegram</b>.',
+            'To connect your account, open <b>Settings → Bot &amp; Alerts</b> in Gantt and click <b>Connect Telegram</b>.',
             baseUrl ? `\n<a href="${baseUrl}">Open Gantt</a>` : '',
           ]
             .filter(Boolean)
@@ -394,7 +394,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!tokenSnap.exists) {
         await sendTelegramMessage(
           chatIdStr,
-          '⚠️ This connection link is invalid or was already used. Please generate a fresh link from <b>Settings → Alerts</b> in Gantt.',
+          '⚠️ This connection link is invalid or was already used. Please generate a fresh link from <b>Settings → Bot &amp; Alerts</b> in Gantt.',
         );
         return res.status(200).json({ ok: true });
       }
@@ -483,7 +483,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!subDoc) {
       await sendTelegramMessage(
         chatIdStr,
-        'Your Telegram chat is not connected to a Gantt account yet. Open <b>Settings → Alerts</b> in Gantt to link it.',
+        'Your Telegram chat is not connected to a Gantt account yet. Open <b>Settings → Bot &amp; Alerts</b> in Gantt to link it.',
       );
       return res.status(200).json({ ok: true });
     }

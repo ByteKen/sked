@@ -43,7 +43,7 @@ describe('SettingsModal tabbed layout & Profile display name', () => {
     });
   });
 
-  it('renders tabs in exact order (Profile, Display, Export, Alerts, Shortcuts) and switches cleanly', () => {
+  it('renders tabs in exact order (Profile, Display, Export, Bot & Alerts, Shortcuts) and switches cleanly', () => {
     render(
       <MemoryRouter>
         <SettingsModal isOpen onClose={vi.fn()} />
@@ -51,7 +51,7 @@ describe('SettingsModal tabbed layout & Profile display name', () => {
     );
 
     const renderedTabs = screen.getAllByRole('tab').map((tab) => tab.textContent?.trim());
-    expect(renderedTabs).toEqual(['Profile', 'Display', 'Export', 'Alerts', 'Shortcuts']);
+    expect(renderedTabs).toEqual(['Profile', 'Display', 'Export', 'Bot & Alerts', 'Shortcuts']);
 
     // Default tab is Profile when signed in
     expect(screen.getByRole('tab', { name: /profile/i })).toHaveAttribute('aria-selected', 'true');
@@ -66,9 +66,9 @@ describe('SettingsModal tabbed layout & Profile display name', () => {
     expect(screen.getByText(/pdf & image export styling/i)).toBeInTheDocument();
     expect(screen.queryByText(/studio dark mode/i)).not.toBeInTheDocument();
 
-    // Switch to Alerts tab
-    fireEvent.click(screen.getByRole('tab', { name: /alerts/i }));
-    expect(screen.getByText(/telegram deadline alerts/i)).toBeInTheDocument();
+    // Switch to Bot & Alerts tab
+    fireEvent.click(screen.getByRole('tab', { name: /bot & alerts/i }));
+    expect(screen.getByText(/telegram bot & alerts/i)).toBeInTheDocument();
 
     // Switch to Shortcuts tab
     fireEvent.click(screen.getByRole('tab', { name: /shortcuts/i }));

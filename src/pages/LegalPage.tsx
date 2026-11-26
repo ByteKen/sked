@@ -64,7 +64,7 @@ const TERMS_SECTIONS: LegalSection[] = [
     title: '5. Telegram Deadline Alerts',
     paragraphs: [
       'Linking a Telegram account is optional. Automated reminders depend on Telegram servers and scheduled background jobs, so delivery timing is not guaranteed and should not be your only backup for critical deadlines.',
-      'You can pause alerts with /pause, resume with /resume, unlink with /stop in Telegram, or disconnect anytime from Settings -> Alerts.',
+      'You can pause alerts with /pause, resume with /resume, unlink with /stop in Telegram, or disconnect anytime from Settings -> Bot & Alerts.',
     ],
   },
   {
