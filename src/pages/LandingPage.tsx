@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
+  BellRinging,
   CalendarCheck,
   CircleNotch,
   CloudCheck,
@@ -12,6 +13,7 @@ import {
   ShareNetwork,
   SignIn,
   Stack,
+  TelegramLogo,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
@@ -31,14 +33,17 @@ const PREVIEW_LANES = [
 
 const CAPABILITIES = [
   { icon: Stack, label: 'Multi-Workspace Sync' },
+  { icon: BellRinging, label: 'Telegram Deadline Alerts' },
   { icon: ShareNetwork, label: 'Live Shareable Links' },
-  { icon: FilePdf, label: 'PDF · PNG · CSV · JSON' },
+  { icon: FilePdf, label: 'Multi-Page PDF & PNG' },
   { icon: CalendarCheck, label: 'Subtasks & Dependencies' },
+  { icon: CloudCheck, label: 'Real-Time Cloud Sync' },
 ];
 
 const TRUST_HIGHLIGHTS = [
   { icon: GlobeHemisphereWest, text: 'Open to any Google account — zero domain restrictions' },
   { icon: CloudCheck, text: 'Automatic real-time cloud sync across your devices' },
+  { icon: BellRinging, text: 'Automated Telegram alerts for upcoming & overdue deadlines' },
   { icon: ShareNetwork, text: 'Share live read-only links with one-click duplication' },
 ];
 
@@ -165,8 +170,9 @@ export function LandingPage() {
                 variants={FADE_UP_ITEM}
                 className="mt-5 text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed"
               >
-                Build nested Gantt roadmaps, track milestone dependencies, export crisp PDF or PNG
-                charts, and share live read-only links with anyone — right from your browser.
+                Build nested Gantt roadmaps, track milestone dependencies, receive automated
+                Telegram deadline alerts, export multi-page PDF or PNG charts, and share live
+                read-only links — right from your browser.
               </motion.p>
 
               {/* Cohesive Capabilities Row */}
@@ -199,10 +205,16 @@ export function LandingPage() {
                       q2-product-roadmap
                     </span>
                   </div>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    LIVE · SHARED
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-brand-50 text-brand-700 border border-brand-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/25">
+                      <BellRinging className="w-3 h-3" weight="fill" />
+                      ALERTS ON
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      LIVE · SHARED
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2.5">
@@ -235,6 +247,31 @@ export function LandingPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Live Telegram Deadline Alert Preview Strip */}
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45, delay: 0.65, ease: STUDIO_EASE }}
+                  className="mt-3.5 pt-3 border-t border-slate-200/80 dark:border-white/[0.07] flex items-center justify-between gap-3"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-6 h-6 rounded-lg bg-sky-500/10 dark:bg-sky-400/15 border border-sky-500/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                      <TelegramLogo className="w-3.5 h-3.5" weight="duotone" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate">
+                        Telegram Deadline Alert
+                      </p>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                        Public Release due in 3 days · Daily digest &amp; urgent pings
+                      </p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0">
+                    08:00 AM
+                  </span>
+                </motion.div>
               </motion.div>
             </motion.div>
 

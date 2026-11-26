@@ -23,6 +23,20 @@ describe('LandingPage mobile sign-in toggle & default theme', () => {
     expect(DEFAULT_PREFERENCES.theme).toBe('light');
   });
 
+  it('highlights automated Telegram deadline alerts on the landing page', () => {
+    render(
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/^telegram deadline alerts$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^telegram deadline alert$/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/automated telegram alerts for upcoming & overdue deadlines/i),
+    ).toBeInTheDocument();
+  });
+
   it('hides editorial overview and footer on mobile when clicking topbar Sign in and restores them on Back', () => {
     render(
       <MemoryRouter>
