@@ -18,7 +18,7 @@ describe('LegalPage Terms of Use & Privacy Policy', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: /5\. telegram deadline alerts/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /5\. telegram bot & alerts/i })).toBeInTheDocument();
     expect(
       screen.getByRole('heading', { name: /8\. disclaimer & limitation of liability/i }),
     ).toBeInTheDocument();

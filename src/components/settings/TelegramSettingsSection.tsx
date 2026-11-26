@@ -156,7 +156,10 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
     setTesting(true);
     try {
       await sendTelegramTestNotification();
-      toast.success('Test alert sent', 'Check your Telegram chat for the confirmation message.');
+      toast.success(
+        'Test message sent',
+        'Check your Telegram chat for quick task buttons and synced slash commands.',
+      );
     } catch (err) {
       toast.error(
         'Test notification failed',
@@ -172,7 +175,10 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
     try {
       await disconnectTelegram();
       setPendingLink(null);
-      toast.info('Telegram disconnected', 'You will no longer receive Telegram deadline alerts.');
+      toast.info(
+        'Telegram disconnected',
+        'Your chat was unlinked from Gantt bot commands and deadline alerts.',
+      );
     } catch (err) {
       toast.error(
         'Could not disconnect Telegram',
@@ -289,8 +295,54 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
         </div>
       ) : (
         <div className="p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025] space-y-4">
-          {/* Enable / Pause Row */}
-          <div className="flex items-center justify-between gap-4">
+          {/* Interactive Bot Companion Banner */}
+          <div className="p-3.5 rounded-xl bg-white/90 dark:bg-surface-dark/70 border border-slate-200/80 dark:border-white/[0.07] space-y-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
+                <TelegramLogo
+                  weight="duotone"
+                  className="w-4 h-4 text-brand-600 dark:text-brand-400"
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                  Interactive Telegram Bot ({connectedHandle})
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Browse tasks, mark items done, and update progress live from chat.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pt-0.5 text-[11px]">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] text-slate-600 dark:text-slate-300">
+                <code className="font-mono font-semibold text-brand-600 dark:text-brand-400">
+                  /tasks
+                </code>{' '}
+                browse &amp; mark done
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] text-slate-600 dark:text-slate-300">
+                <code className="font-mono font-semibold text-brand-600 dark:text-brand-400">
+                  /today
+                </code>{' '}
+                urgent items
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] text-slate-600 dark:text-slate-300">
+                <code className="font-mono font-semibold text-brand-600 dark:text-brand-400">
+                  /upcoming
+                </code>{' '}
+                next 14d
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/[0.05] text-slate-600 dark:text-slate-300">
+                <code className="font-mono font-semibold text-brand-600 dark:text-brand-400">
+                  /summary
+                </code>{' '}
+                progress overview
+              </span>
+            </div>
+          </div>
+
+          {/* Scheduled Alerts Toggle Row */}
+          <div className="flex items-center justify-between gap-4 pt-1">
             <div className="flex items-center gap-3 min-w-0">
               <BellRinging
                 weight="duotone"
@@ -298,10 +350,11 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                  Enable Deadline Reminders
+                  Scheduled Deadline Alerts
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Delivered to {connectedHandle} across all of your workspaces
+                  Automatic pings for upcoming and overdue tasks (bot commands stay active even if
+                  paused)
                 </p>
               </div>
             </div>
@@ -309,7 +362,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
               checked={telegram.enabled}
               disabled={saving}
               onChange={(next) => void handleUpdate({ enabled: next })}
-              ariaLabel="Toggle Telegram deadline reminders"
+              ariaLabel="Toggle scheduled Telegram deadline alerts"
             />
           </div>
 
@@ -405,16 +458,6 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
             />
           </div>
 
-          {/* Interactive Bot Commands Hint */}
-          <div className="p-3 rounded-lg bg-white/80 dark:bg-surface-dark/60 border border-slate-200/70 dark:border-white/[0.06] text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-            <span className="font-semibold text-slate-800 dark:text-slate-200">Bot commands:</span>{' '}
-            <code className="font-mono text-brand-600 dark:text-brand-400">/tasks</code> browse &amp;
-            mark done · <code className="font-mono text-brand-600 dark:text-brand-400">/today</code>{' '}
-            urgent items ·{' '}
-            <code className="font-mono text-brand-600 dark:text-brand-400">/upcoming</code> next 14d ·{' '}
-            <code className="font-mono text-brand-600 dark:text-brand-400">/summary</code> overview
-          </div>
-
           {/* Actions Row */}
           <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-200/70 dark:border-white/[0.06] flex-wrap">
             <Button
@@ -429,7 +472,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
                 />
               }
             >
-              Send Test Alert
+              Send Test Message
             </Button>
 
             <Button

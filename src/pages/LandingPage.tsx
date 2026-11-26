@@ -33,7 +33,7 @@ const PREVIEW_LANES = [
 
 const CAPABILITIES = [
   { icon: Stack, label: 'Multi-Workspace Sync' },
-  { icon: BellRinging, label: 'Telegram Deadline Alerts' },
+  { icon: TelegramLogo, label: 'Telegram Bot & Alerts' },
   { icon: ShareNetwork, label: 'Live Shareable Links' },
   { icon: FilePdf, label: 'Multi-Page PDF & PNG' },
   { icon: CalendarCheck, label: 'Subtasks & Dependencies' },
@@ -43,7 +43,10 @@ const CAPABILITIES = [
 const TRUST_HIGHLIGHTS = [
   { icon: GlobeHemisphereWest, text: 'Open to any Google account — zero domain restrictions' },
   { icon: CloudCheck, text: 'Automatic real-time cloud sync across your devices' },
-  { icon: BellRinging, text: 'Automated Telegram alerts for upcoming & overdue deadlines' },
+  {
+    icon: TelegramLogo,
+    text: 'Interactive Telegram bot to browse tasks, mark done, and get deadline alerts',
+  },
   { icon: ShareNetwork, text: 'Share live read-only links with one-click duplication' },
 ];
 
@@ -170,9 +173,9 @@ export function LandingPage() {
                 variants={FADE_UP_ITEM}
                 className="mt-5 text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-xl leading-relaxed"
               >
-                Build nested Gantt roadmaps, track milestone dependencies, receive automated
-                Telegram deadline alerts, export multi-page PDF or PNG charts, and share live
-                read-only links — right from your browser.
+                Build nested Gantt roadmaps, track milestone dependencies, manage tasks and
+                deadline alerts with the Telegram bot, export multi-page PDF or PNG charts, and
+                share live read-only links right from your browser.
               </motion.p>
 
               {/* Cohesive Capabilities Row */}
@@ -208,7 +211,7 @@ export function LandingPage() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-brand-50 text-brand-700 border border-brand-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/25">
                       <BellRinging className="w-3 h-3" weight="fill" />
-                      ALERTS ON
+                      BOT &amp; ALERTS
                     </span>
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:border-emerald-500/25">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -261,10 +264,10 @@ export function LandingPage() {
                     </span>
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold text-slate-800 dark:text-slate-100 truncate">
-                        Telegram Deadline Alert
+                        Telegram Bot &amp; Alerts
                       </p>
                       <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
-                        Public Release due in 3 days · Daily digest &amp; urgent pings
+                        Public Release due in 3 days · Tap Done or run /tasks right in chat
                       </p>
                     </div>
                   </div>

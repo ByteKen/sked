@@ -23,17 +23,16 @@ describe('LandingPage mobile sign-in toggle & default theme', () => {
     expect(DEFAULT_PREFERENCES.theme).toBe('light');
   });
 
-  it('highlights automated Telegram deadline alerts on the landing page', () => {
+  it('highlights the interactive Telegram bot and alerts on the landing page', () => {
     render(
       <MemoryRouter>
         <LandingPage />
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/^telegram deadline alerts$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^telegram deadline alert$/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^telegram bot & alerts$/i).length).toBeGreaterThanOrEqual(2);
     expect(
-      screen.getByText(/automated telegram alerts for upcoming & overdue deadlines/i),
+      screen.getByText(/interactive telegram bot to browse tasks, mark done, and get deadline alerts/i),
     ).toBeInTheDocument();
   });
 
