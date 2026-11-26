@@ -1,0 +1,168 @@
+import { useState, type RefObject } from 'react';
+import { List, MagnifyingGlass, SignOut, X } from '@phosphor-icons/react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BrandLogo } from '@/components/ui/BrandLogo';
+import { WorkspaceSelector } from '@/components/workspace/WorkspaceSelector';
+import type { AuthUser } from '@/types';
+import { ThemeToggle } from './ThemeToggle';
+import { UserProfilePill } from './UserProfilePill';
+
+export interface AppHeaderProps {
+  user: AuthUser | null;
+  searchTerm: string;
+  searchInputRef: RefObject<HTMLInputElement | null>;
+  onSearchChange: (val: string) => void;
+  onGoHome: () => void;
+  onOpenSettings: () => void;
+  onRequestLogout: () => void;
+  onOpenMobileMenu: () => void;
+}
+
+export function AppHeader({
+  user,
+  searchTerm,
+  searchInputRef,
+  onSearchChange,
+  onGoHome,
+  onOpenSettings,
+  onRequestLogout,
+  onOpenMobileMenu,
+}: AppHeaderProps) {
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-slate-200/80 dark:border-white/[0.08] bg-white/90 dark:bg-[#090B10]/90 backdrop-blur-md">
+      <div className="h-16 sm:h-[68px] px-4 sm:px-6 flex items-center justify-between gap-3">
+        {/* Left: Mobile menu + Custom Logo + Workspace Switcher */}
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onOpenMobileMenu}
+            aria-label="Open menu"
+            className="md:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08] cursor-pointer"
+          >
+            <List className="w-5 h-5" weight="bold" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onGoHome}
+            title="All Workspaces"
+            aria-label="Go to all workspaces"
+            className="flex items-center gap-3 group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded-xl pr-1"
+          >
+            <BrandLogo size="md" className="group-hover:scale-[1.04] transition-transform" />
+            <span className="hidden sm:inline font-mono text-sm font-bold uppercase tracking-[0.2em] text-slate-900 dark:text-slate-100">
+              GANTT
+            </span>
+          </button>
+
+          <span className="hidden md:inline-block h-6 w-px bg-slate-200 dark:bg-white/[0.1]" />
+
+          <div className="hidden md:block">
+            <WorkspaceSelector />
+          </div>
+        </div>
+
+        {/* Center: Search */}
+        <div className="hidden lg:block flex-1 max-w-md mx-2">
+          <div className="relative">
+            <MagnifyingGlass
+              className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+              weight="duotone"
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder="Search tasks... (/)"
+              aria-label="Search tasks"
+              className="w-full h-10 pl-10 pr-9 text-sm rounded-xl border border-slate-200/90 dark:border-white/[0.09] bg-slate-50/80 dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:bg-white dark:focus:bg-surface-elevated focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" weight="bold" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Clean Theme + User Profile Pill (opens Settings & Account) + Sign Out */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={() => setMobileSearchOpen((v) => !v)}
+            aria-label="Toggle task search"
+            className="lg:hidden inline-flex items-center justify-center h-10 w-10 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.08] cursor-pointer"
+          >
+            <MagnifyingGlass className="w-[18px] h-[18px]" weight="duotone" />
+          </button>
+
+          <ThemeToggle className="hidden md:inline-flex" />
+
+          {user && (
+            <UserProfilePill
+              user={user}
+              onClick={onOpenSettings}
+              hideDetailsBelow="md"
+              className="hidden md:inline-flex"
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={onRequestLogout}
+            aria-label="Sign out"
+            title={user ? `Sign out (${user.email})` : 'Sign out'}
+            className="hidden md:inline-flex items-center justify-center h-10 w-10 rounded-xl text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-colors cursor-pointer"
+          >
+            <SignOut className="w-5 h-5" weight="duotone" />
+          </button>
+        </div>
+      </div>
+
+      {/* Expandable Mobile Search Bar */}
+      <AnimatePresence>
+        {mobileSearchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden px-4 pb-3 lg:hidden"
+          >
+            <div className="relative">
+              <MagnifyingGlass
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                weight="duotone"
+              />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Search tasks..."
+                autoFocus
+                className="w-full h-10 pl-9 pr-9 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => onSearchChange('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400"
+                >
+                  <X className="w-4 h-4" weight="bold" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </header>
+  );
+}

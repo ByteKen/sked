@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Private user workspaces, tasks, and preferences (backward-compatible with production)
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Publicly readable shared Gantt charts; listing disabled to prevent enumeration
+    match /sharedCharts/{shareId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null
+                            && resource.data.ownerId == request.auth.uid;
+    }
+
+    // Server-managed Telegram reminder subscriptions & short-lived link tokens (Firebase Admin SDK only)
+    match /telegramSubscriptions/{userId} {
+      allow read, write: if false;
+    }
+    match /telegramLinkTokens/{tokenId} {
+      allow read, write: if false;
+    }
+  }
+}

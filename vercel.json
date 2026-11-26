@@ -1,5 +1,11 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/((?!api/).*)", "destination": "/" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/reminders?mode=daily",
+      "schedule": "0 0 * * *"
+    }
   ]
 }
