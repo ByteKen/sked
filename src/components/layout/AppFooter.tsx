@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { GithubLogo } from '@phosphor-icons/react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/utils/cn';
 
 const GITHUB_REPO_URL = 'https://github.com/ByteKen/sked';
@@ -12,6 +13,7 @@ export interface AppFooterProps {
 
 export function AppFooter({ compact = false, className }: AppFooterProps) {
   const year = new Date().getFullYear();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   if (compact) {
     return (
@@ -35,6 +37,15 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
             >
               Privacy Policy
             </Link>
+            {isAuthenticated && (
+              <Link
+                to="/status"
+                className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors"
+              >
+                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Status</span>
+              </Link>
+            )}
           </nav>
 
           <div className="flex items-center gap-3.5">
@@ -114,6 +125,15 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
             >
               Privacy Policy
             </Link>
+            {isAuthenticated && (
+              <Link
+                to="/status"
+                className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
+              >
+                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span>Status</span>
+              </Link>
+            )}
           </nav>
 
           <p className="font-mono text-xs text-slate-500 dark:text-slate-400">

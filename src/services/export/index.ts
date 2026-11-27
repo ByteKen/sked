@@ -12,6 +12,7 @@ import { buildExportBaseFilename } from './downloadUtils';
 import { exportTasksToJSON } from './jsonExporter';
 import { exportTasksToPDF } from './pdfExporter';
 import { exportTasksToPNG } from './pngExporter';
+import { exportTasksToXLSX } from './xlsxExporter';
 
 export interface ExportChartOptions {
   workspaceTitle?: string | null;
@@ -80,6 +81,12 @@ export async function exportGanttChart(
               : filename,
         };
       }
+      case 'xlsx':
+        exportTasksToXLSX(tasks, filename, {
+          workspaceTitle: options.workspaceTitle,
+          baseline: options.baseline,
+        });
+        break;
       case 'csv':
         exportTasksToCSV(tasks, filename, options.baseline);
         break;

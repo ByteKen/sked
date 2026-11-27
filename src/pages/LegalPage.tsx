@@ -40,7 +40,7 @@ const TERMS_SECTIONS: LegalSection[] = [
     id: 'service',
     title: '2. What Sked Provides',
     paragraphs: [
-      'Sked is a free browser app for planning project timelines, nested subtasks, and milestone dependencies. It includes cloud sync across workspaces, multi-page PDF, PNG, CSV, and JSON exports, optional public read-only share links, and an optional Telegram bot with deadline alerts.',
+      'Sked is a free browser app for planning project timelines, nested subtasks, and milestone dependencies. It includes cloud sync across workspaces, multi-page PDF, PNG, Excel, CSV, and JSON exports, optional public read-only share links, and an optional Telegram bot with deadline alerts.',
     ],
   },
   {
@@ -189,7 +189,7 @@ const PRIVACY_SECTIONS: LegalSection[] = [
     id: 'deletion',
     title: '7. Exports, Retention & Deletion',
     paragraphs: [
-      'Your data stays stored while your account remains active. You can export any workspace to JSON, CSV, PNG, or PDF anytime from the bottom Import / Export menu.',
+      'Your data stays stored while your account remains active. You can export any workspace to Excel, JSON, CSV, PNG, or PDF anytime from the bottom Import / Export menu.',
       'Disconnecting Telegram deletes your chat link immediately. You can also permanently delete your entire account from Settings -> Profile (Delete Account). After a quick Google re-verification prompt, this erases your workspaces, active share links, Telegram subscription, preferences, and Firebase login record.',
     ],
   },

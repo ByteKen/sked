@@ -1,5 +1,12 @@
 import { useEffect, useRef, type RefObject } from 'react';
-import { FileCode, FileCsv, FilePdf, ImageSquare, UploadSimple } from '@phosphor-icons/react';
+import {
+  FileCode,
+  FileCsv,
+  FilePdf,
+  FileXls,
+  ImageSquare,
+  UploadSimple,
+} from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
 import type { ExportFormat } from '@/types';
 import { cn } from '@/utils/cn';
@@ -24,9 +31,15 @@ const EXPORT_ITEMS: Array<{
     icon: ImageSquare,
   },
   {
+    format: 'xlsx',
+    label: 'Export Excel (.xlsx)',
+    description: 'Styled Gantt diagram, colors & auto-fit',
+    icon: FileXls,
+  },
+  {
     format: 'csv',
     label: 'Export CSV',
-    description: 'Spreadsheet-compatible task table',
+    description: 'Plain-text task table (no styling)',
     icon: FileCsv,
   },
   {

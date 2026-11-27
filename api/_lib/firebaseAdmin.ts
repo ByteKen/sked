@@ -29,7 +29,13 @@ export interface StoredTelegramSubscription {
   sentReminders?: Record<string, string>;
 }
 
-function parseServiceAccount(): ServiceAccount {
+export interface ServiceAccountCredentials {
+  projectId: string;
+  clientEmail: string;
+  privateKey: string;
+}
+
+function parseServiceAccount(): ServiceAccountCredentials {
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON?.trim();
   if (!raw) {
     throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON environment variable.');
@@ -69,6 +75,10 @@ function parseServiceAccount(): ServiceAccount {
     clientEmail,
     privateKey,
   };
+}
+
+export function getServiceAccountCredentials(): ServiceAccountCredentials {
+  return parseServiceAccount();
 }
 
 function ensureAdminApp() {

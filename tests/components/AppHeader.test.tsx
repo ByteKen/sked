@@ -102,9 +102,15 @@ describe('AppHeader direct workspace & profile menu + unified bottom Import/Expo
 
     expect(screen.getByRole('menuitem', { name: /import json/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /export pdf/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /export excel/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('menuitem', { name: /import json/i }));
     expect(onOpenImport).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+
+    fireEvent.click(exportBtn);
+    fireEvent.click(screen.getByRole('menuitem', { name: /export excel/i }));
+    expect(onExport).toHaveBeenCalledWith('xlsx');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
 
     fireEvent.click(exportBtn);

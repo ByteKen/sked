@@ -7,6 +7,7 @@ import { HomePage } from '@/pages/HomePage';
 import { LandingPage } from '@/pages/LandingPage';
 import { LegalPage } from '@/pages/LegalPage';
 import { SharedChartPage } from '@/pages/SharedChartPage';
+import { StatusPage } from '@/pages/StatusPage';
 import { WorkspacePage } from '@/pages/WorkspacePage';
 import { userDocumentSync } from '@/services/userDocumentSync';
 import { useAuthStore } from '@/store/authStore';
@@ -124,6 +125,14 @@ export default function App() {
         <Route path="/share/:shareId" element={<SharedChartPage />} />
         <Route path="/terms" element={<LegalPage section="terms" />} />
         <Route path="/privacy" element={<LegalPage section="privacy" />} />
+        <Route
+          path="/status"
+          element={
+            <ProtectedRoute>
+              <StatusPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/workspace/:workspaceId"
           element={

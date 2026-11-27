@@ -3,7 +3,7 @@ export type BarHeightMode = 'compact' | 'normal' | 'large';
 export type TaskLabelPosition = 'inside' | 'outside' | 'top' | 'hidden';
 export type SubtaskLabelPosition = 'outside' | 'top' | 'hidden';
 export type TimelineGranularity = 'days' | 'weeks' | 'months' | 'quarters' | 'years';
-export type ExportFormat = 'pdf' | 'png' | 'csv' | 'json';
+export type ExportFormat = 'pdf' | 'png' | 'xlsx' | 'csv' | 'json';
 
 export interface UserPreferences {
   useRoundedSubtasks: boolean;
