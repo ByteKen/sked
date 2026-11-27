@@ -2,7 +2,12 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { auth } from '@/config/firebase';
 import { createWorkspaceBaseline } from '@/domain/scheduling';
-import { computeTaskStats, getMaxTaskId, sanitizeTaskTree } from '@/domain/taskTree';
+import {
+  computeTaskStats,
+  getMaxTaskId,
+  recalculateParentProgress,
+  sanitizeTaskTree,
+} from '@/domain/taskTree';
 import { setTaskStatusInTree } from '@/domain/taskViews';
 import {
   deleteOrphanedShareDoc,
@@ -142,7 +147,9 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
           const nextStats: Record<string, TaskStats> = {};
           const nextTasksMap: Record<string, Task[]> = {};
           for (const wsId of Object.keys(nextWorkspaces)) {
-            const wsTasks = sanitizeTaskTree((rawData[`tasks_${wsId}`] ?? []) as Task[]);
+            const wsTasks = recalculateParentProgress(
+              sanitizeTaskTree((rawData[`tasks_${wsId}`] ?? []) as Task[]),
+            );
             nextTasksMap[wsId] = wsTasks;
             nextStats[wsId] = computeTaskStats(wsTasks);
           }

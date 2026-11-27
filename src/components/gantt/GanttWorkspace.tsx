@@ -13,6 +13,7 @@ import {
   computeTaskDateBoundsMap,
 } from '@/domain/scheduling';
 import { computeTaskStats, flattenTasks, isTaskCompleted } from '@/domain/taskTree';
+import { getTaskDueUrgency } from '@/domain/taskViews';
 import {
   buildTimelineColumns,
   calculateAutoFitZoom,
@@ -21,6 +22,7 @@ import {
   calculateTodayOffsetPx,
   clampTimelineZoom,
   computeAnchoredScrollLeft,
+  formatISODate,
   getDisplayDays,
   getPixelsPerDay,
   getTodayLocal,
@@ -314,12 +316,18 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
         const slipDays = baselineEntry ? computeTaskBaselineSlipDays(task, baseline) : null;
         const isCritical = showCriticalPath ? criticalPath.criticalTaskIds.has(task.id) : undefined;
         const slackDays = showCriticalPath ? (criticalPath.slackByTaskId.get(task.id) ?? null) : null;
+        const { urgency: dueUrgency, daysUntilDue } = getTaskDueUrgency(
+          task,
+          formatISODate(getTodayLocal()),
+        );
 
         tooltipRef.current?.show(task, durationDays, rect, {
           isCritical,
           slackDays,
           baselineEntry,
           slipDays,
+          dueUrgency,
+          daysUntilDue,
         });
       },
       [handleHoverRowIndex, showBaseline, baseline, showCriticalPath, criticalPath],

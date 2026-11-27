@@ -74,7 +74,12 @@ describe('interactive Telegram bot domain logic', () => {
     expect(JSON.stringify(tasks)).not.toContain('undefined');
   });
 
-  it('updates numeric progress on a leaf task and flips isDone cleanly at 100%', () => {
+  it('updates numeric progress on a leaf task, rolls up parent phase progress, and flips isDone cleanly at 100%', () => {
+    const { tasks: partialParentTasks } = setBotTaskProgress(sampleTasks, 3, 50);
+    // Planning children are 100% and 50% -> parent rolls up to 75% (not 50%)
+    expect(partialParentTasks[0]!.progress).toBe(75);
+    expect(partialParentTasks[0]!.isDone).toBe(false);
+
     const { tasks: halfTasks, updatedTask: half } = setBotTaskProgress(sampleTasks, 4, 50);
     expect(half?.progress).toBe(50);
     expect(half?.isDone).toBe(false);

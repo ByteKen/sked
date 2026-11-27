@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getTaskStatus } from '@/domain/taskTree';
+import type { DueUrgency } from '@/domain/taskViews';
 import { formatDateRange } from '@/domain/timeline';
 import type { FlatTask, TaskBaselineEntry } from '@/types';
 import { cn } from '@/utils/cn';
@@ -13,6 +14,43 @@ export interface BarTooltipMeta {
   slackDays?: number | null;
   baselineEntry?: TaskBaselineEntry | null;
   slipDays?: number | null;
+  dueUrgency?: DueUrgency;
+  daysUntilDue?: number;
+}
+
+function getTooltipDueCountdown(
+  urgency?: DueUrgency,
+  daysUntilDue?: number,
+): { label: string; className: string } | null {
+  if (!urgency || typeof daysUntilDue !== 'number' || urgency === 'completed') {
+    return null;
+  }
+  if (urgency === 'overdue') {
+    return {
+      label: `${Math.abs(daysUntilDue)}d overdue`,
+      className:
+        'bg-rose-100 text-rose-700 border-rose-200/80 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/30',
+    };
+  }
+  if (urgency === 'today') {
+    return {
+      label: 'Due today',
+      className:
+        'bg-amber-100 text-amber-800 border-amber-200/80 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/30',
+    };
+  }
+  if (urgency === 'soon') {
+    return {
+      label: `${daysUntilDue}d left`,
+      className:
+        'bg-amber-50 text-amber-700 border-amber-200/80 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/25',
+    };
+  }
+  return {
+    label: `${daysUntilDue}d left`,
+    className:
+      'bg-slate-100 text-slate-600 border-slate-200/80 dark:bg-white/[0.07] dark:text-slate-300 dark:border-white/[0.1]',
+  };
 }
 
 export interface BarTooltipHandle {
@@ -59,6 +97,7 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
     const status = state ? getTaskStatus(state.task) : null;
     const style = status ? STATUS_BAR_STYLES[status] : null;
     const meta = state?.meta;
+    const dueCountdown = getTooltipDueCountdown(meta?.dueUrgency, meta?.daysUntilDue);
 
     return createPortal(
       <AnimatePresence>
@@ -88,10 +127,22 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
                 </span>
               </div>
 
-              <p className="font-mono text-[11px] text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
-                {formatDateRange(state.task.start, state.task.end)} · {state.durationDays}{' '}
-                {state.durationDays === 1 ? 'day' : 'days'}
-              </p>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                  {formatDateRange(state.task.start, state.task.end)} · {state.durationDays}{' '}
+                  {state.durationDays === 1 ? 'day' : 'days'}
+                </p>
+                {dueCountdown && (
+                  <span
+                    className={cn(
+                      'shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md border font-mono text-[10px] font-semibold tabular-nums',
+                      dueCountdown.className,
+                    )}
+                  >
+                    {dueCountdown.label}
+                  </span>
+                )}
+              </div>
 
               {/* Critical Path / Slack metadata */}
               {meta && (meta.isCritical || typeof meta.slackDays === 'number') && (

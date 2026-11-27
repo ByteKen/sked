@@ -17,7 +17,7 @@ import {
   normalizeEditorEmails,
   normalizeEmail,
 } from '@/domain/collaboration';
-import { getMaxTaskId, sanitizeTaskTree } from '@/domain/taskTree';
+import { getMaxTaskId, recalculateParentProgress, sanitizeTaskTree } from '@/domain/taskTree';
 import {
   DEFAULT_PREFERENCES,
   type ChartEditorAttribution,
@@ -71,7 +71,9 @@ export function extractSharedViewPrefs(prefs: Partial<UserPreferences>): SharedC
 }
 
 function hydrateSharedChart(shareId: string, raw: Partial<SharedChart>): SharedChart {
-  const tasks = Array.isArray(raw.tasks) ? sanitizeTaskTree(raw.tasks) : [];
+  const tasks = Array.isArray(raw.tasks)
+    ? recalculateParentProgress(sanitizeTaskTree(raw.tasks))
+    : [];
   return {
     shareId: raw.shareId || shareId,
     ownerId: raw.ownerId || '',

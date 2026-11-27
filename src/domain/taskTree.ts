@@ -139,7 +139,8 @@ export function filterTasks(tasks: readonly Task[], rawQuery: string): Task[] {
 }
 
 /**
- * Bottom-up recalculation of parent task progress from subtask completion.
+ * Bottom-up recalculation of parent task progress by averaging child progress.
+ * Reaches 100% (completed) strictly when every direct child is completed.
  */
 export function recalculateParentProgress(tasks: readonly Task[]): Task[] {
   return tasks.map((task) => {
@@ -147,13 +148,20 @@ export function recalculateParentProgress(tasks: readonly Task[]): Task[] {
       return task;
     }
     const updatedChildren = recalculateParentProgress(task.children);
-    const completedCount = updatedChildren.filter(isTaskCompleted).length;
-    const progress = Math.round((completedCount / updatedChildren.length) * 100);
+    const allCompleted = updatedChildren.every(isTaskCompleted);
+    const totalProgress = updatedChildren.reduce(
+      (sum, child) =>
+        sum + (isTaskCompleted(child) ? 100 : Math.max(0, Math.min(100, child.progress ?? 0))),
+      0,
+    );
+    const averageProgress = Math.round(totalProgress / updatedChildren.length);
+    const progress = allCompleted ? 100 : Math.min(99, averageProgress);
     return {
       ...task,
       children: updatedChildren,
       progress,
-      isDone: progress === 100,
+      isDone: allCompleted,
+      isWorking: allCompleted ? false : task.isWorking,
     };
   });
 }
@@ -385,8 +393,8 @@ export function prepareImportedTasks(
       const rawDeps = pendingDependencies.get(task.id);
       const resolvedDeps = rawDeps
         ? rawDeps
-            .map((rawId) => idMapping.get(String(rawId)))
-            .filter((mappedId): mappedId is number => mappedId !== undefined && mappedId !== task.id)
+          .map((rawId) => idMapping.get(String(rawId)))
+          .filter((mappedId): mappedId is number => mappedId !== undefined && mappedId !== task.id)
         : (task.dependencies ?? []);
 
       return {

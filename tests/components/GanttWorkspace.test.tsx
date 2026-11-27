@@ -481,4 +481,35 @@ describe('GanttWorkspace unified split-pane alignment', () => {
       });
     }
   });
+
+  it('displays both task duration and due countdown in the timeline hover tooltip for incomplete tasks', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 18, 12, 0, 0)); // Jan 18, 2026
+    try {
+      render(
+        <GanttWorkspace
+          tasks={tasksFixture}
+          selectedTaskId={null}
+          onSelectTask={vi.fn()}
+          onTaskActivate={vi.fn()}
+          readOnly
+        />,
+      );
+
+      // CI Pipeline is Jan 11 - Jan 20 (10 days), 0% complete -> 2d left on Jan 18
+      const ciBar = screen.getByRole('button', { name: /CI Pipeline:/i });
+      fireEvent.pointerEnter(ciBar, { pointerType: 'mouse' });
+
+      const tooltip = screen.getByRole('tooltip');
+      expect(tooltip).toHaveTextContent('10 days');
+      expect(tooltip).toHaveTextContent('2d left');
+
+      // Completed Setup Repository (100%) should not show a countdown badge
+      const setupBar = screen.getByRole('button', { name: /Setup Repository:/i });
+      fireEvent.pointerEnter(setupBar, { pointerType: 'mouse' });
+      expect(screen.getByRole('tooltip')).not.toHaveTextContent(/left|overdue|Due today/i);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

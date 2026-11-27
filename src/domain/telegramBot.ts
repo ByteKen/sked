@@ -47,27 +47,27 @@ export type ParsedBotCallback =
   | { type: 'summary' }
   | { type: 'task_list'; workspaceId: string; filter: TaskFilterMode; page: number }
   | {
-      type: 'task_detail';
-      workspaceId: string;
-      taskId: number;
-      filter: TaskFilterMode;
-      page: number;
-    }
+    type: 'task_detail';
+    workspaceId: string;
+    taskId: number;
+    filter: TaskFilterMode;
+    page: number;
+  }
   | {
-      type: 'toggle_done';
-      workspaceId: string;
-      taskId: number;
-      filter: TaskFilterMode;
-      page: number;
-    }
+    type: 'toggle_done';
+    workspaceId: string;
+    taskId: number;
+    filter: TaskFilterMode;
+    page: number;
+  }
   | {
-      type: 'set_progress';
-      workspaceId: string;
-      taskId: number;
-      progress: number;
-      filter: TaskFilterMode;
-      page: number;
-    }
+    type: 'set_progress';
+    workspaceId: string;
+    taskId: number;
+    progress: number;
+    filter: TaskFilterMode;
+    page: number;
+  }
   | { type: 'quick_done'; workspaceId: string; taskId: number; source: 'alert' | 'today' | 'upcoming' };
 
 export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
@@ -211,14 +211,20 @@ export function recalculateBotTreeProgress(tasks: readonly Task[]): Task[] {
       return sanitizeTaskForBot(task);
     }
     const updatedChildren = recalculateBotTreeProgress(task.children);
-    const completedCount = updatedChildren.filter(isBotTaskCompleted).length;
-    const progress = Math.round((completedCount / updatedChildren.length) * 100);
+    const allCompleted = updatedChildren.every(isBotTaskCompleted);
+    const totalProgress = updatedChildren.reduce(
+      (sum, child) =>
+        sum + (isBotTaskCompleted(child) ? 100 : Math.max(0, Math.min(100, child.progress ?? 0))),
+      0,
+    );
+    const averageProgress = Math.round(totalProgress / updatedChildren.length);
+    const progress = allCompleted ? 100 : Math.min(99, averageProgress);
     return sanitizeTaskForBot({
       ...task,
       children: updatedChildren,
       progress,
-      isDone: progress === 100,
-      isWorking: progress === 100 ? false : task.isWorking,
+      isDone: allCompleted,
+      isWorking: allCompleted ? false : task.isWorking,
     });
   });
 }

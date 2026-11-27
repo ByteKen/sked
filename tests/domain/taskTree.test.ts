@@ -8,8 +8,10 @@ import {
   filterTasks,
   flattenTasks,
   prepareImportedTasks,
+  recalculateParentProgress,
   toggleSubtaskDoneInTree,
   toggleTaskCollapsedInTree,
+  updateTaskInTree,
 } from '@/domain/taskTree';
 import type { Task } from '@/types';
 
@@ -74,7 +76,55 @@ describe('taskTree domain logic', () => {
     ).toEqual([1, 4]);
   });
 
-  it('auto-recalculates parent progress when toggling subtask completion', () => {
+  it('auto-recalculates parent progress from partial subtask progress and only hits 100% when all subtasks finish', () => {
+    // Updating Spec (id: 3) to 40% alongside Research (100%) rolls Phase 1 up to 70%
+    const partial = updateTaskInTree(sampleTasks, 3, { progress: 40 });
+    expect(partial[0]!.progress).toBe(70);
+    expect(partial[0]!.isDone).toBe(false);
+
+    // Single subtask at 70% rolls parent directly up to 70% (not 0%)
+    const singleChildTree: Task[] = [
+      {
+        id: 10,
+        name: 'PLANNING',
+        start: '2026-11-26',
+        end: '2026-12-10',
+        progress: 0,
+        children: [
+          {
+            id: 11,
+            name: 'Identify Beneficiary',
+            start: '2026-11-26',
+            end: '2026-11-29',
+            progress: 70,
+            parentId: 10,
+          },
+        ],
+      },
+    ];
+    const rolledSingle = recalculateParentProgress(singleChildTree);
+    expect(rolledSingle[0]!.progress).toBe(70);
+    expect(rolledSingle[0]!.isDone).toBe(false);
+
+    // 100%, 100%, 99% averages 99.67% -> stays capped at 99% until all subtasks actually complete
+    const nearComplete = recalculateParentProgress([
+      {
+        id: 20,
+        name: 'Phase',
+        start: '2026-01-01',
+        end: '2026-01-10',
+        progress: 0,
+        children: [
+          { id: 21, name: 'A', start: '2026-01-01', end: '2026-01-03', progress: 100, isDone: true, parentId: 20 },
+          { id: 22, name: 'B', start: '2026-01-04', end: '2026-01-06', progress: 100, isDone: true, parentId: 20 },
+          { id: 23, name: 'C', start: '2026-01-07', end: '2026-01-10', progress: 99, isDone: false, parentId: 20 },
+        ],
+      },
+    ]);
+    expect(nearComplete[0]!.progress).toBe(99);
+    expect(nearComplete[0]!.isDone).toBe(false);
+
+    // Toggling remaining subtask done reaches 100% and marks parent done
     const updated = toggleSubtaskDoneInTree(sampleTasks, 3);
     const parent = updated[0]!;
     expect(parent.progress).toBe(100);

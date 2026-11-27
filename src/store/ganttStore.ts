@@ -11,6 +11,7 @@ import {
   flattenTasks,
   getMaxTaskId,
   prepareImportedTasks,
+  recalculateParentProgress,
   sanitizeTaskTree,
   setAllCollapsedInTree,
   toggleSubtaskDoneInTree,
@@ -325,7 +326,7 @@ export const useGanttStore = create<GanttStoreState>()(
                 set({ loading: false });
                 return;
               }
-              const sanitized = sanitizeTaskTree(chart.tasks);
+              const sanitized = recalculateParentProgress(sanitizeTaskTree(chart.tasks));
               const nextId = Math.max(1, chart.nextId ?? getMaxTaskId(sanitized) + 1);
               set({
                 tasks: sanitized,
@@ -353,7 +354,7 @@ export const useGanttStore = create<GanttStoreState>()(
 
               const rawTasks = (snapshot.data[`tasks_${workspaceId}`] ?? []) as Task[];
               const rawNextId = (snapshot.data[`nextId_${workspaceId}`] ?? 1) as number;
-              const sanitized = sanitizeTaskTree(rawTasks);
+              const sanitized = recalculateParentProgress(sanitizeTaskTree(rawTasks));
               lastPersistedPrivateTasks = sanitized;
 
               set({
