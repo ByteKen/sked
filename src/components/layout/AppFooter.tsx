@@ -3,7 +3,7 @@ import { GithubLogo } from '@phosphor-icons/react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { cn } from '@/utils/cn';
 
-const GITHUB_PROFILE_URL = 'https://github.com/ByteKen';
+const GITHUB_REPO_URL = 'https://github.com/ByteKen/sked';
 
 export interface AppFooterProps {
   compact?: boolean;
@@ -39,14 +39,14 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
 
           <div className="flex items-center gap-3.5">
             <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">
-              © {year} Gantt
+              © {year} Sked
             </span>
             <a
-              href={GITHUB_PROFILE_URL}
+              href={GITHUB_REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="GitHub profile"
-              title="GitHub"
+              aria-label="Sked GitHub repository"
+              title="View Sked on GitHub"
               className="inline-flex items-center justify-center h-7 w-7 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-brand-400 dark:hover:bg-white/[0.08] transition-colors"
             >
               <GithubLogo weight="duotone" className="w-4 h-4" />
@@ -71,7 +71,7 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
             <div className="flex items-center gap-3">
               <BrandLogo size="sm" />
               <span className="font-mono text-base font-bold uppercase tracking-[0.22em] text-slate-900 dark:text-white">
-                GANTT
+                SKED
               </span>
               <span className="font-mono text-xs font-medium text-brand-600 dark:text-brand-400">
                 v2.0
@@ -79,17 +79,17 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
             </div>
 
             <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-400">
-              Modern project timeline studio for nested schedules, milestone dependencies,
-              high-resolution exports, and live shareable Gantt charts.
+              An open-source project workspace for Gantt timelines, Kanban boards, task lists,
+              real-time collaboration, high-resolution exports, and Telegram alerts.
             </p>
           </div>
 
           <a
-            href={GITHUB_PROFILE_URL}
+            href={GITHUB_REPO_URL}
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="GitHub profile"
-            title="Visit GitHub profile"
+            aria-label="Sked GitHub repository"
+            title="View Sked source code on GitHub"
             className="inline-flex items-center justify-center self-start sm:self-end h-10 w-10 rounded-xl border border-slate-200/90 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-slate-600 hover:text-brand-600 hover:border-brand-300 dark:text-slate-300 dark:hover:text-brand-400 dark:hover:border-brand-400/35 dark:hover:bg-white/[0.08] shadow-surface-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
           >
             <GithubLogo weight="duotone" className="w-5 h-5" />
@@ -117,7 +117,7 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
           </nav>
 
           <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
-            © {year} Gantt · Cloud Timeline Studio
+            © {year} Sked · Open-Source Project Workspace
           </p>
         </div>
       </div>

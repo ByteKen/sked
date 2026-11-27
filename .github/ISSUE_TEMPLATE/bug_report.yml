@@ -1,5 +1,5 @@
 name: Bug Report
-description: Report a bug, rendering glitch, sync issue, or unexpected behavior in Gantt
+description: Report a bug, rendering glitch, sync issue, or unexpected behavior in Sked
 title: "[Bug]: "
 labels: ["bug", "needs triage"]
 body:
@@ -9,9 +9,9 @@ body:
       label: Before Submitting
       description: Confirm these quick checks first so we can investigate faster.
       options:
-        - label: I tested on the latest live version at [ganttapp.vercel.app](https://ganttapp.vercel.app) (or latest `main` locally)
+        - label: I tested on the latest live version at [skedspace.vercel.app](https://skedspace.vercel.app) (or latest `main` locally)
           required: true
-        - label: I searched existing open and closed [issues](https://github.com/ByteKen/ganttapp/issues) for duplicates
+        - label: I searched existing open and closed [issues](https://github.com/ByteKen/sked/issues) for duplicates
           required: true
 
   - type: dropdown
@@ -31,7 +31,7 @@ body:
     id: area
     attributes:
       label: Workspace / Subsystem
-      description: Choose the part of Gantt where the issue occurs.
+      description: Choose the part of Sked where the issue occurs.
       options:
         - Timeline & Gantt Chart (zoom, pan, bars, layout)
         - Tasks, Subtasks & Dependencies

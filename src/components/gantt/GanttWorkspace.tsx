@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { computeCriticalPath, computeTaskBaselineSlipDays } from '@/domain/scheduling';
 import { computeTaskStats, flattenTasks, isTaskCompleted } from '@/domain/taskTree';
 import {
   buildTimelineColumns,
@@ -32,6 +33,7 @@ import type {
   SharedChartViewPrefs,
   Task,
   TimelineGranularity,
+  WorkspaceBaseline,
 } from '@/types';
 import { cn } from '@/utils/cn';
 import { BarTooltip, type BarTooltipHandle } from './BarTooltip';
@@ -65,6 +67,15 @@ export interface GanttWorkspaceProps {
   onToggleSubtaskDone?: (taskId: number) => void;
   onAddSubtask?: (parentId: number) => void;
   onDeleteTask?: (taskId: number) => void;
+  onRescheduleTask?: (
+    taskId: number,
+    nextStart: string,
+    nextEnd: string,
+    autoCascade: boolean,
+  ) => void;
+  baseline?: WorkspaceBaseline | null;
+  onSaveBaseline?: () => void;
+  onClearBaseline?: () => void;
   onExpandedChange?: (expanded: boolean) => void;
   readOnly?: boolean;
   viewPrefsOverride?: SharedChartViewPrefs;
@@ -97,6 +108,10 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       onToggleSubtaskDone,
       onAddSubtask,
       onDeleteTask,
+      onRescheduleTask,
+      baseline = null,
+      onSaveBaseline,
+      onClearBaseline,
       onExpandedChange,
       readOnly = false,
       viewPrefsOverride,
@@ -156,6 +171,9 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const [zoom, setZoom] = useState(1);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [isExpandedView, setIsExpandedView] = useState(false);
+    const [showCriticalPath, setShowCriticalPath] = useState(false);
+    const [showBaseline, setShowBaseline] = useState(false);
+    const [autoCascade, setAutoCascade] = useState(true);
     const [localCollapsed, setLocalCollapsed] = useState<Record<number, boolean>>({});
 
     // Imperative refs for zero-rerender hover synchronization & floating tooltip
@@ -187,6 +205,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
 
     const allFlatTasks = useMemo(() => flattenTasks(tasks), [tasks]);
     const stats = useMemo(() => computeTaskStats(tasks), [tasks]);
+    const criticalPath = useMemo(() => computeCriticalPath(tasks), [tasks]);
 
     const visibleTasks = useMemo(
       () =>
@@ -286,10 +305,37 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const handleBarHover = useCallback(
       (task: FlatTask, durationDays: number, rect: DOMRect, rowIndex: number) => {
         handleHoverRowIndex(rowIndex);
-        tooltipRef.current?.show(task, durationDays, rect);
+        const baselineEntry = showBaseline && baseline ? (baseline.entries[task.id] ?? null) : null;
+        const slipDays = baselineEntry ? computeTaskBaselineSlipDays(task, baseline) : null;
+        const isCritical = showCriticalPath ? criticalPath.criticalTaskIds.has(task.id) : undefined;
+        const slackDays = showCriticalPath ? (criticalPath.slackByTaskId.get(task.id) ?? null) : null;
+
+        tooltipRef.current?.show(task, durationDays, rect, {
+          isCritical,
+          slackDays,
+          baselineEntry,
+          slipDays,
+        });
       },
-      [handleHoverRowIndex],
+      [handleHoverRowIndex, showBaseline, baseline, showCriticalPath, criticalPath],
     );
+
+    const handleRescheduleFromTimeline = useCallback(
+      (taskId: number, nextStart: string, nextEnd: string) => {
+        onRescheduleTask?.(taskId, nextStart, nextEnd, autoCascade);
+      },
+      [onRescheduleTask, autoCascade],
+    );
+
+    const handleSaveBaseline = useCallback(() => {
+      onSaveBaseline?.();
+      setShowBaseline(true);
+    }, [onSaveBaseline]);
+
+    const handleClearBaseline = useCallback(() => {
+      onClearBaseline?.();
+      setShowBaseline(false);
+    }, [onClearBaseline]);
 
     const handleBarLeave = useCallback(() => {
       tooltipRef.current?.hide();
@@ -319,6 +365,26 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       }
       return map;
     }, [visibleTasks, range.startDate, pixelsPerDay]);
+
+    // Pre-computed Planned Baseline ghost bar geometries when baseline overlay is enabled
+    const baselineGeometries = useMemo(() => {
+      const map = new Map<number, TaskBarGeometry>();
+      if (!showBaseline || !baseline) return map;
+      for (const task of visibleTasks) {
+        const entry = baseline.entries[task.id];
+        if (!entry) continue;
+        map.set(
+          task.id,
+          calculateTaskBarGeometry(
+            { start: entry.start, end: entry.end },
+            range.startDate,
+            pixelsPerDay,
+            28,
+          ),
+        );
+      }
+      return map;
+    }, [showBaseline, baseline, visibleTasks, range.startDate, pixelsPerDay]);
 
     const totalWidth = useMemo(
       () => columns.reduce((acc, col) => acc + col.widthPx, 0),
@@ -464,6 +530,17 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
           hasCollapsibleParents={parentIds.length > 0}
           allCollapsed={allCollapsed}
           onToggleCollapseAll={handleToggleCollapseAll}
+          showCriticalPath={showCriticalPath}
+          onToggleCriticalPath={() => setShowCriticalPath((prev) => !prev)}
+          criticalTaskCount={criticalPath.criticalTaskIds.size}
+          autoCascade={autoCascade}
+          onToggleAutoCascade={!readOnly && onRescheduleTask ? () => setAutoCascade((v) => !v) : undefined}
+          baseline={baseline}
+          showBaseline={showBaseline}
+          onToggleShowBaseline={() => setShowBaseline((prev) => !prev)}
+          onSaveBaseline={onSaveBaseline ? handleSaveBaseline : undefined}
+          onClearBaseline={onClearBaseline ? handleClearBaseline : undefined}
+          readOnly={readOnly}
           isMobile={isMobile}
         />
 
@@ -579,6 +656,8 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     showDependencyLines={viewPrefs.showDependencyLines}
                     showSubtaskConnectors={viewPrefs.showSubtaskConnectors}
                     showTaskDescriptions={showTaskDescriptions}
+                    showCriticalPath={showCriticalPath}
+                    criticalEdgeKeys={criticalPath.criticalEdgeKeys}
                     totalWidth={totalWidth}
                     totalHeight={totalHeight}
                   />
@@ -586,6 +665,13 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                   <TimelineBars
                     visibleTasks={visibleTasks}
                     barGeometries={barGeometries}
+                    baselineGeometries={baselineGeometries}
+                    baseline={baseline}
+                    showBaseline={showBaseline}
+                    showCriticalPath={showCriticalPath}
+                    criticalTaskIds={criticalPath.criticalTaskIds}
+                    pixelsPerDay={pixelsPerDay}
+                    readOnly={readOnly}
                     rowHeight={rowHeight}
                     barHeight={viewPrefs.barHeight}
                     useRoundedSubtasks={viewPrefs.useRoundedSubtasks}
@@ -595,6 +681,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     selectedTaskId={selectedTaskId}
                     onSelectTask={handleSelectTask}
                     onTaskActivate={onTaskActivate}
+                    onRescheduleTask={onRescheduleTask ? handleRescheduleFromTimeline : undefined}
                     onBarHover={handleBarHover}
                     onBarLeave={handleBarLeave}
                   />

@@ -157,7 +157,7 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
               </p>
             ) : (
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Shown as the &ldquo;Shared by&rdquo; name on public Gantt links and across your
+                Shown as the &ldquo;Shared by&rdquo; name on public Sked links and across your
                 workspace header.
                 {sharedCount > 0 && (
                   <>

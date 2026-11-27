@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { SharedChart } from '@/types';
 
 const mockSubscribe = vi.fn();
+const mockCommitCollab = vi.fn();
 
 vi.mock('@/services/shareRepository', () => ({
   subscribeToSharedChart: (...args: unknown[]) => mockSubscribe(...args),
+  commitCollaborativeChartMutation: (...args: unknown[]) => mockCommitCollab(...args),
 }));
 
 vi.mock('@/config/firebase', () => ({
@@ -79,6 +81,13 @@ describe('SharedChartPage (/share/:shareId)', () => {
     expect(screen.getByText(/Live · Read-only/i)).toBeInTheDocument();
     expect(screen.getAllByText('TypeScript Upgrade').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: /Duplicate/i })).toBeInTheDocument();
+
+    // Public viewer can switch cleanly to Board and List views in read-only mode
+    fireEvent.click(screen.getByRole('tab', { name: /board/i }));
+    expect(screen.getByTestId('board-card-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: /list/i }));
+    expect(screen.getByTestId('list-row-1')).toBeInTheDocument();
   });
 
   it('shows a graceful unavailable state when sharing is revoked or invalid', () => {
@@ -98,5 +107,57 @@ describe('SharedChartPage (/share/:shareId)', () => {
     );
 
     expect(screen.getByText('Chart Unavailable')).toBeInTheDocument();
+  });
+
+  it('unlocks live collaborative editing when a signed-in user is in editorEmails while keeping anonymous viewers read-only', () => {
+    const collabChart: SharedChart = {
+      ...sampleSharedChart,
+      editorEmails: ['maya@example.com'],
+      lastEditedBy: {
+        uid: 'owner-1',
+        name: 'Alex Rivera',
+        at: '2026-04-02T00:00:00.000Z',
+      },
+    };
+
+    mockSubscribe.mockImplementation(
+      (_id: string, onData: (chart: SharedChart | null) => void) => {
+        onData(collabChart);
+        return vi.fn();
+      },
+    );
+    mockCommitCollab.mockResolvedValue({ tasks: collabChart.tasks, nextId: 2, version: 2 });
+
+    useAuthStore.setState({
+      user: {
+        id: 'editor-2',
+        name: 'Maya Chen',
+        email: 'MAYA@example.com',
+        photoURL: null,
+        loginTime: '2026-04-02T00:00:00.000Z',
+      },
+      isAuthenticated: true,
+      loading: false,
+      error: null,
+      cancelled: false,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/share/PubLink123456789']}>
+        <Routes>
+          <Route path="/share/:shareId" element={<SharedChartPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/Live · Editing/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^New Task$/i })).toBeInTheDocument();
+
+    // Switch to Board view and move task status -> commits via atomic collaborative transaction
+    fireEvent.click(screen.getByRole('tab', { name: /board/i }));
+    fireEvent.change(screen.getByLabelText(/move typescript upgrade to status/i), {
+      target: { value: 'completed' },
+    });
+    expect(mockCommitCollab).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new capability or workflow improvement for Gantt
+description: Suggest a new capability or workflow improvement for Sked
 title: "[Feature]: "
 labels: ["enhancement", "needs triage"]
 body:
@@ -9,14 +9,14 @@ body:
       label: Before Submitting
       description: Confirm this quick check before opening a new request.
       options:
-        - label: I searched existing open and closed [issues](https://github.com/ByteKen/ganttapp/issues) to check if this is already suggested
+        - label: I searched existing open and closed [issues](https://github.com/ByteKen/sked/issues) to check if this is already suggested
           required: true
 
   - type: dropdown
     id: area
     attributes:
       label: Workspace / Subsystem
-      description: Choose the area of Gantt this suggestion relates to.
+      description: Choose the area of Sked this suggestion relates to.
       options:
         - Timeline & Gantt Chart (zoom, pan, bars, layout)
         - Tasks, Subtasks & Dependencies
@@ -43,7 +43,7 @@ body:
     id: proposal
     attributes:
       label: Proposed Solution
-      description: Describe how you would like this to work in Gantt.
+      description: Describe how you would like this to work in Sked.
       placeholder: Explain the behavior or UI change you have in mind...
     validations:
       required: true

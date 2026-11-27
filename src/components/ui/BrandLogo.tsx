@@ -19,7 +19,7 @@ export function BrandLogo({
   size = 'sm',
   glow = false,
   className,
-  alt = 'Gantt logo',
+  alt = 'Sked logo',
 }: BrandLogoProps) {
   const { px, cls } = SIZE_MAP[size];
   const src = px <= 40 ? '/logo-128.png' : px <= 96 ? '/logo-256.png' : '/logo-512.png';

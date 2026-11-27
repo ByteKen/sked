@@ -129,7 +129,7 @@ describe('interactive Telegram bot domain logic', () => {
       'active',
       0,
       '2026-11-26',
-      'https://ganttapp.vercel.app',
+      'https://skedspace.vercel.app',
     );
     const allButtons = detail.replyMarkup!.inline_keyboard.flat();
     for (const btn of allButtons) {
@@ -142,7 +142,7 @@ describe('interactive Telegram bot domain logic', () => {
   });
 
   it('builds interactive workspace list, task list, today, upcoming, summary, and actionable alert keyboards', () => {
-    const wsView = buildWorkspacesView([workspaceFixture], '2026-11-26', 'https://ganttapp.vercel.app');
+    const wsView = buildWorkspacesView([workspaceFixture], '2026-11-26', 'https://skedspace.vercel.app');
     expect(wsView.text).toContain('Plotwise');
     expect(wsView.replyMarkup!.inline_keyboard[0]![0]!.callback_data).toBe('ws:ws_plotwise123456:a:0');
 
@@ -151,23 +151,23 @@ describe('interactive Telegram bot domain logic', () => {
       'active',
       0,
       '2026-11-26',
-      'https://ganttapp.vercel.app',
+      'https://skedspace.vercel.app',
     );
     expect(activeList.text).toContain('Finalize Scope');
     expect(activeList.text).not.toContain('Create Gantt Chart');
 
-    const todayView = buildTodayView([workspaceFixture], '2026-11-26', 'https://ganttapp.vercel.app');
+    const todayView = buildTodayView([workspaceFixture], '2026-11-26', 'https://skedspace.vercel.app');
     expect(todayView.text).toContain('Overdue Audit');
     expect(todayView.text).toContain('Finalize Scope');
     expect(
       todayView.replyMarkup!.inline_keyboard.flat().some((b) => b.callback_data === 'qd:t:ws_plotwise123456:4'),
     ).toBe(true);
 
-    const upcomingView = buildUpcomingView([workspaceFixture], '2026-11-26', 'https://ganttapp.vercel.app');
+    const upcomingView = buildUpcomingView([workspaceFixture], '2026-11-26', 'https://skedspace.vercel.app');
     expect(upcomingView.text).toContain('Finalize Scope');
 
-    const summaryView = buildSummaryView([workspaceFixture], '2026-11-26', 'https://ganttapp.vercel.app');
-    expect(summaryView.text).toContain('Gantt Progress Summary');
+    const summaryView = buildSummaryView([workspaceFixture], '2026-11-26', 'https://skedspace.vercel.app');
+    expect(summaryView.text).toContain('Sked Progress Summary');
     expect(summaryView.text).toContain('Overdue: <b>1</b>');
 
     const alertMarkup = buildReminderAlertReplyMarkup(
@@ -184,7 +184,7 @@ describe('interactive Telegram bot domain logic', () => {
           progress: 25,
         },
       ],
-      'https://ganttapp.vercel.app',
+      'https://skedspace.vercel.app',
     );
     expect(alertMarkup.inline_keyboard[0]![0]!.callback_data).toBe('qd:a:ws_plotwise123456:3');
   });

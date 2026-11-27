@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import type { WorkspaceViewMode } from '@/types';
 
 interface ShortcutHandlers {
   enabled?: boolean;
   onFocusSearch?: () => void;
   onNewTask?: () => void;
+  onViewChange?: (view: WorkspaceViewMode) => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -21,6 +23,7 @@ export function useKeyboardShortcuts({
   enabled = true,
   onFocusSearch,
   onNewTask,
+  onViewChange,
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -40,6 +43,15 @@ export function useKeyboardShortcuts({
       } else if ((event.key === 'n' || event.key === 'N') && onNewTask) {
         event.preventDefault();
         onNewTask();
+      } else if (event.key === '1' && onViewChange) {
+        event.preventDefault();
+        onViewChange('timeline');
+      } else if (event.key === '2' && onViewChange) {
+        event.preventDefault();
+        onViewChange('board');
+      } else if (event.key === '3' && onViewChange) {
+        event.preventDefault();
+        onViewChange('list');
       } else if ((event.key === '+' || event.key === '=') && onZoomIn) {
         event.preventDefault();
         onZoomIn();
@@ -60,5 +72,15 @@ export function useKeyboardShortcuts({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [enabled, onFocusSearch, onNewTask, onZoomIn, onZoomOut, onResetZoom, onAutoFit, onGoToToday]);
+  }, [
+    enabled,
+    onFocusSearch,
+    onNewTask,
+    onViewChange,
+    onZoomIn,
+    onZoomOut,
+    onResetZoom,
+    onAutoFit,
+    onGoToToday,
+  ]);
 }

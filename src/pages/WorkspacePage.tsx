@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MagnifyingGlassMinus, Plus, UploadSimple } from '@phosphor-icons/react';
 import { AnimatePresence } from 'framer-motion';
 import { GanttWorkspace, type GanttWorkspaceHandle } from '@/components/gantt/GanttWorkspace';
@@ -13,8 +13,12 @@ import { TaskModal } from '@/components/modals/TaskModal';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { KanbanBoardView } from '@/components/views/KanbanBoardView';
+import { TaskListView } from '@/components/views/TaskListView';
 import { FloatingActionDock } from '@/components/workspace/FloatingActionDock';
+import { isCollaborativeWorkspace } from '@/domain/collaboration';
 import { filterTasks } from '@/domain/taskTree';
+import { TASK_STATUS_LABELS } from '@/domain/taskViews';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { exportGanttChart } from '@/services/export';
 import { useAuthStore } from '@/store/authStore';
@@ -22,11 +26,20 @@ import { useGanttStore } from '@/store/ganttStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { toast } from '@/store/toastStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import type { ExportFormat, FlatTask, ImportTaskInput, Task, TaskDraft } from '@/types';
+import type {
+  ExportFormat,
+  FlatTask,
+  ImportTaskInput,
+  Task,
+  TaskDraft,
+  TaskStatus,
+  WorkspaceViewMode,
+} from '@/types';
 import { cn } from '@/utils/cn';
 
 export function WorkspacePage() {
   const { workspaceId } = useParams<{ workspaceId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const user = useAuthStore((s) => s.user);
@@ -36,6 +49,8 @@ export function WorkspacePage() {
   const workspacesLoading = useWorkspaceStore((s) => s.loading);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
+  const saveBaseline = useWorkspaceStore((s) => s.saveBaseline);
+  const clearBaseline = useWorkspaceStore((s) => s.clearBaseline);
 
   const {
     tasks,
@@ -44,6 +59,9 @@ export function WorkspacePage() {
     addTask,
     addSubtask,
     updateTask,
+    rescheduleTask,
+    setTaskStatus,
+    restoreTasksSnapshot,
     deleteTask,
     toggleSubtaskDone,
     toggleCollapse,
@@ -57,14 +75,19 @@ export function WorkspacePage() {
   const switchingRef = useRef(false);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
+    const raw = searchParams.get('task');
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  });
   const [isChartExpanded, setIsChartExpanded] = useState(false);
-  const [mobileView, setMobileView] = useState<'chart' | 'list'>('chart');
+  const [activeView, setActiveView] = useState<WorkspaceViewMode>('timeline');
 
   // Modal states
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [parentTaskId, setParentTaskId] = useState<number | null>(null);
+  const [newTaskInitialStatus, setNewTaskInitialStatus] = useState<TaskStatus | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -90,36 +113,66 @@ export function WorkspacePage() {
     }
   }, [workspaceId, workspaces, workspacesLoading, currentWorkspaceId, switchWorkspace, navigate]);
 
-  // Subscribe to tasks for active workspace
+  const hasCurrentWorkspace = Boolean(currentWorkspace);
+  const collabShareKey =
+    isCollaborativeWorkspace(currentWorkspace) && currentWorkspace?.shareId
+      ? currentWorkspace.shareId
+      : '';
+
+  // Subscribe to tasks for active workspace (re-subscribes ONLY when workspace or collab mode changes)
   useEffect(() => {
-    if (!workspaceId || !workspaces[workspaceId]) return;
+    if (!workspaceId || !hasCurrentWorkspace) return;
     const unsubscribe = initTasks(workspaceId);
     return () => {
       unsubscribe();
       cleanupTasks();
     };
-  }, [workspaceId, workspaces, initTasks, cleanupTasks]);
+  }, [workspaceId, hasCurrentWorkspace, collabShareKey, initTasks, cleanupTasks]);
+
+  // Clean consumed ?task=<id> deep-link query param once the workspace is mounted
+  useEffect(() => {
+    if (searchParams.has('task')) {
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const visibleTasks = useMemo(
     () => (searchTerm.trim() ? filterTasks(tasks, searchTerm) : tasks),
     [tasks, searchTerm],
   );
 
+  const handleChangeView = useCallback((view: WorkspaceViewMode) => {
+    setActiveView(view);
+    if (view !== 'timeline') {
+      setIsChartExpanded(false);
+    }
+  }, []);
+
   const handleOpenNewTask = useCallback(() => {
     setEditingTask(null);
     setParentTaskId(null);
+    setNewTaskInitialStatus(null);
+    setTaskModalOpen(true);
+  }, []);
+
+  const handleOpenNewTaskWithStatus = useCallback((status: TaskStatus) => {
+    setEditingTask(null);
+    setParentTaskId(null);
+    setNewTaskInitialStatus(status);
     setTaskModalOpen(true);
   }, []);
 
   const handleEditTask = useCallback((task: FlatTask | Task) => {
     setEditingTask(task);
     setParentTaskId(null);
+    setNewTaskInitialStatus(null);
     setTaskModalOpen(true);
   }, []);
 
   const handleAddSubtask = useCallback((parentId: number) => {
     setEditingTask(null);
     setParentTaskId(parentId);
+    setNewTaskInitialStatus(null);
     setTaskModalOpen(true);
   }, []);
 
@@ -138,6 +191,7 @@ export function WorkspacePage() {
       setTaskModalOpen(false);
       setEditingTask(null);
       setParentTaskId(null);
+      setNewTaskInitialStatus(null);
     },
     [editingTask, parentTaskId, updateTask, addSubtask, addTask],
   );
@@ -159,6 +213,94 @@ export function WorkspacePage() {
     toast.info('Task deleted', deleteTargetTask.name);
     setDeleteTargetTask(null);
   }, [deleteTargetTask, deleteTask, selectedTaskId]);
+
+  const handleRescheduleTask = useCallback(
+    (taskId: number, nextStart: string, nextEnd: string, autoCascade: boolean) => {
+      const result = rescheduleTask(taskId, nextStart, nextEnd, autoCascade);
+      if (!result.movedTask) return;
+      const movedName = result.movedTask.name;
+      const undoAction = {
+        label: 'Undo',
+        onClick: () => {
+          restoreTasksSnapshot(result.previousTasks);
+          toast.info('Schedule restored', movedName);
+        },
+      };
+      const cascadeCount = result.cascadedTaskIds.length;
+      if (cascadeCount > 0) {
+        toast.success(
+          `Rescheduled "${movedName}"`,
+          `Auto-shifted ${cascadeCount} dependent ${cascadeCount === 1 ? 'task' : 'tasks'}.`,
+          6000,
+          undoAction,
+        );
+      } else {
+        toast.info('Schedule updated', movedName, 5000, undoAction);
+      }
+    },
+    [rescheduleTask, restoreTasksSnapshot],
+  );
+
+  const handleStatusChange = useCallback(
+    (taskId: number, nextStatus: TaskStatus) => {
+      const result = setTaskStatus(taskId, nextStatus);
+      if (!result.updatedTask) return;
+      const taskName = result.updatedTask.name;
+      toast.info(
+        `Moved to ${TASK_STATUS_LABELS[nextStatus]}`,
+        taskName,
+        5000,
+        {
+          label: 'Undo',
+          onClick: () => {
+            restoreTasksSnapshot(result.previousTasks);
+            toast.info('Status restored', taskName);
+          },
+        },
+      );
+    },
+    [setTaskStatus, restoreTasksSnapshot],
+  );
+
+  const handleUpdateProgress = useCallback(
+    (taskId: number, progress: number) => {
+      updateTask(
+        taskId,
+        progress === 100
+          ? { progress: 100, isDone: true, isWorking: false }
+          : { progress, isDone: false },
+        { debounce: true },
+      );
+    },
+    [updateTask],
+  );
+
+  const handleSaveBaseline = useCallback(() => {
+    if (!workspaceId) return;
+    void saveBaseline(workspaceId, tasks)
+      .then((saved) => {
+        if (saved) {
+          toast.success(
+            'Baseline saved',
+            'Ghost bars now compare your original plan against live dates.',
+          );
+        }
+      })
+      .catch(() => {
+        toast.error('Could not save baseline', 'Please try again.');
+      });
+  }, [workspaceId, tasks, saveBaseline]);
+
+  const handleClearBaseline = useCallback(() => {
+    if (!workspaceId) return;
+    void clearBaseline(workspaceId)
+      .then(() => {
+        toast.info('Baseline cleared');
+      })
+      .catch(() => {
+        toast.error('Could not clear baseline', 'Please try again.');
+      });
+  }, [workspaceId, clearBaseline]);
 
   const handleImport = useCallback(
     (inputs: ImportTaskInput[]) => {
@@ -202,11 +344,12 @@ export function WorkspacePage() {
     enabled: !anyModalOpen,
     onFocusSearch: () => searchInputRef.current?.focus(),
     onNewTask: handleOpenNewTask,
-    onZoomIn: () => ganttRef.current?.zoomIn(),
-    onZoomOut: () => ganttRef.current?.zoomOut(),
-    onResetZoom: () => ganttRef.current?.resetZoom(),
-    onAutoFit: () => ganttRef.current?.autoFit(),
-    onGoToToday: () => ganttRef.current?.scrollToToday(),
+    onViewChange: handleChangeView,
+    onZoomIn: activeView === 'timeline' ? () => ganttRef.current?.zoomIn() : undefined,
+    onZoomOut: activeView === 'timeline' ? () => ganttRef.current?.zoomOut() : undefined,
+    onResetZoom: activeView === 'timeline' ? () => ganttRef.current?.resetZoom() : undefined,
+    onAutoFit: activeView === 'timeline' ? () => ganttRef.current?.autoFit() : undefined,
+    onGoToToday: activeView === 'timeline' ? () => ganttRef.current?.scrollToToday() : undefined,
   });
 
   if (workspacesLoading || !currentWorkspace) {
@@ -237,6 +380,10 @@ export function WorkspacePage() {
           onGoHome={() => navigate('/')}
           onOpenSettings={() => setSettingsModalOpen(true)}
           onRequestLogout={() => setLogoutConfirmOpen(true)}
+          activeView={activeView}
+          onChangeView={handleChangeView}
+          isShared={Boolean(currentWorkspace.isShared && currentWorkspace.shareId)}
+          onOpenShare={() => setShareModalOpen(true)}
         />
       )}
 
@@ -303,20 +450,52 @@ export function WorkspacePage() {
           </div>
         ) : (
           <div className="flex-1 min-h-0">
-            <GanttWorkspace
-              ref={ganttRef}
-              tasks={visibleTasks}
-              selectedTaskId={selectedTaskId}
-              onSelectTask={setSelectedTaskId}
-              onTaskActivate={handleEditTask}
-              onToggleCollapse={toggleCollapse}
-              onSetAllCollapsed={setAllCollapsed}
-              onToggleSubtaskDone={toggleSubtaskDone}
-              onAddSubtask={handleAddSubtask}
-              onDeleteTask={handleRequestDeleteTask}
-              onExpandedChange={setIsChartExpanded}
-              mobileView={mobileView}
-            />
+            {activeView === 'timeline' ? (
+              <GanttWorkspace
+                ref={ganttRef}
+                tasks={visibleTasks}
+                selectedTaskId={selectedTaskId}
+                onSelectTask={setSelectedTaskId}
+                onTaskActivate={handleEditTask}
+                onToggleCollapse={toggleCollapse}
+                onSetAllCollapsed={setAllCollapsed}
+                onToggleSubtaskDone={toggleSubtaskDone}
+                onAddSubtask={handleAddSubtask}
+                onDeleteTask={handleRequestDeleteTask}
+                onRescheduleTask={handleRescheduleTask}
+                baseline={currentWorkspace.baseline}
+                onSaveBaseline={handleSaveBaseline}
+                onClearBaseline={handleClearBaseline}
+                onExpandedChange={setIsChartExpanded}
+                mobileView="chart"
+              />
+            ) : activeView === 'board' ? (
+              <KanbanBoardView
+                tasks={visibleTasks}
+                selectedTaskId={selectedTaskId}
+                onSelectTask={setSelectedTaskId}
+                onTaskActivate={handleEditTask}
+                onStatusChange={handleStatusChange}
+                onAddTaskWithStatus={handleOpenNewTaskWithStatus}
+                onDeleteTask={handleRequestDeleteTask}
+                baseline={currentWorkspace.baseline}
+              />
+            ) : (
+              <TaskListView
+                tasks={visibleTasks}
+                selectedTaskId={selectedTaskId}
+                onSelectTask={setSelectedTaskId}
+                onTaskActivate={handleEditTask}
+                onStatusChange={handleStatusChange}
+                onUpdateProgress={handleUpdateProgress}
+                onRescheduleTask={handleRescheduleTask}
+                onToggleCollapse={toggleCollapse}
+                onSetAllCollapsed={setAllCollapsed}
+                onAddSubtask={handleAddSubtask}
+                onDeleteTask={handleRequestDeleteTask}
+                baseline={currentWorkspace.baseline}
+              />
+            )}
           </div>
         )}
       </main>
@@ -337,11 +516,9 @@ export function WorkspacePage() {
       {/* Mobile Bottom Navigation */}
       {!isChartExpanded && (
         <MobileBottomBar
-          workspace={currentWorkspace}
-          mobileView={mobileView}
-          onChangeView={setMobileView}
+          activeView={activeView}
+          onChangeView={handleChangeView}
           onAddTask={handleOpenNewTask}
-          onOpenShare={() => setShareModalOpen(true)}
           onOpenImport={() => setImportModalOpen(true)}
           onExport={(fmt) => void handleExport(fmt)}
         />
@@ -355,11 +532,13 @@ export function WorkspacePage() {
           allTasks={tasks}
           isSubtask={parentTaskId !== null || Boolean(editingTask?.parentId)}
           parentTask={parentTaskId !== null ? findTaskById(parentTaskId) : null}
+          initialStatus={newTaskInitialStatus}
           onSave={handleSaveTask}
           onClose={() => {
             setTaskModalOpen(false);
             setEditingTask(null);
             setParentTaskId(null);
+            setNewTaskInitialStatus(null);
           }}
         />
       )}

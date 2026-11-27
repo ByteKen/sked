@@ -18,6 +18,11 @@ const KEYBOARD_SHORTCUTS: ShortcutRow[] = [
     keys: ['/'],
   },
   {
+    label: 'Switch workspace view',
+    description: 'Jump between Timeline, Board, and List views',
+    keys: ['1', '2', '3'],
+  },
+  {
     label: 'Jump to Today',
     description: 'Center the timeline smoothly on today’s marker',
     keys: ['T'],
@@ -59,6 +64,11 @@ const TIMELINE_GESTURES: ShortcutRow[] = [
     label: 'Mobile pinch-to-zoom',
     description: 'Pinch or spread two fingers directly on the timeline',
     keys: ['2-Finger Pinch'],
+  },
+  {
+    label: 'Drag bar to reschedule',
+    description: 'Drag on desktop (or touch & hold on mobile); press Esc to cancel',
+    keys: ['Drag / Hold', 'Esc'],
   },
   {
     label: 'Resize task panel',

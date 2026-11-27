@@ -177,7 +177,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
       setPendingLink(null);
       toast.info(
         'Telegram disconnected',
-        'Your chat was unlinked from Gantt bot commands and deadline alerts.',
+        'Your chat was unlinked from Sked bot commands and deadline alerts.',
       );
     } catch (err) {
       toast.error(

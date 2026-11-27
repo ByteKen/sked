@@ -270,12 +270,12 @@ function SettingsModalContent({
                     )}
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        Studio Dark Mode
+                        Dark Mode
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         {theme === 'dark'
-                          ? 'Obsidian dark studio surface'
-                          : 'Crisp alabaster daylight surface'}
+                          ? 'Low-glare dark workspace surface'
+                          : 'Crisp daylight workspace surface'}
                       </p>
                     </div>
                   </div>
@@ -541,7 +541,7 @@ function SettingsModalContent({
                     {(
                       [
                         { value: 'light', label: 'Light (Print)', icon: Sun },
-                        { value: 'dark', label: 'Dark Studio', icon: MoonStars },
+                        { value: 'dark', label: 'Dark Theme', icon: MoonStars },
                       ] as const
                     ).map((opt) => {
                       const active = exportTheme === opt.value;

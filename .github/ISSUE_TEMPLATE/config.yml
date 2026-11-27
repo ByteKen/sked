@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: Live Gantt App
-    url: https://ganttapp.vercel.app
-    about: Open the hosted Gantt timeline studio in your browser.
+  - name: Live Sked App
+    url: https://skedspace.vercel.app
+    about: Open the hosted Sked project workspace in your browser.
   - name: Terms of Use & Privacy Policy
-    url: https://ganttapp.vercel.app/terms
-    about: Review how Gantt stores workspace data, share links, and Telegram alerts.
+    url: https://skedspace.vercel.app/terms
+    about: Review how Sked stores workspace data, share links, and Telegram alerts.

@@ -76,26 +76,26 @@ describe('AppHeader direct workspace & profile menu + unified bottom Import/Expo
     expect(onRequestLogout).toHaveBeenCalledTimes(1);
   });
 
-  it('merges Import JSON and Export formats inside the bottom Export menu', async () => {
+  it('merges Import JSON and Export formats inside the bottom Export menu and switches mobile views', async () => {
     const onOpenImport = vi.fn();
     const onExport = vi.fn();
+    const onChangeView = vi.fn();
 
     render(
       <MobileBottomBar
-        workspace={{
-          id: 'ws_1',
-          title: 'Plotwise',
-          createdAt: '2026-01-01T00:00:00Z',
-          updatedAt: '2026-01-01T00:00:00Z',
-        }}
-        mobileView="chart"
-        onChangeView={vi.fn()}
+        activeView="timeline"
+        onChangeView={onChangeView}
         onAddTask={vi.fn()}
-        onOpenShare={vi.fn()}
         onOpenImport={onOpenImport}
         onExport={onExport}
       />,
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /^board$/i }));
+    expect(onChangeView).toHaveBeenCalledWith('board');
+
+    fireEvent.click(screen.getByRole('button', { name: /^list$/i }));
+    expect(onChangeView).toHaveBeenCalledWith('list');
 
     const exportBtn = screen.getByRole('button', { name: /import or export tasks/i });
     fireEvent.click(exportBtn);

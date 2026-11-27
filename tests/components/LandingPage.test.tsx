@@ -34,6 +34,11 @@ describe('LandingPage mobile sign-in toggle & default theme', () => {
     expect(
       screen.getByText(/interactive telegram bot to browse tasks, mark done, and get deadline alerts/i),
     ).toBeInTheDocument();
+    expect(screen.getByText(/an open-source project workspace/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /sked github repository/i })).toHaveAttribute(
+      'href',
+      'https://github.com/ByteKen/sked',
+    );
   });
 
   it('hides the sign-in card on mobile until topbar Sign in is clicked, then swaps back cleanly on Back', () => {

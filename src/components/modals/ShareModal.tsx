@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowSquareOut,
@@ -8,11 +8,20 @@ import {
   GlobeHemisphereWest,
   LockKey,
   ShareNetwork,
+  UserPlus,
+  UsersThree,
+  WarningCircle,
+  X,
 } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Switch } from '@/components/ui/Switch';
+import {
+  MAX_EDITORS_PER_WORKSPACE,
+  normalizeEditorEmails,
+  validateEditorEmailInput,
+} from '@/domain/collaboration';
 import { buildShareUrl } from '@/services/shareRepository';
 import { useAuthStore } from '@/store/authStore';
 import { useGanttStore } from '@/store/ganttStore';
@@ -36,10 +45,14 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
   const enableSharing = useWorkspaceStore((s) => s.enableSharing);
   const disableSharing = useWorkspaceStore((s) => s.disableSharing);
   const regenerateSharing = useWorkspaceStore((s) => s.regenerateSharing);
+  const updateWorkspaceEditors = useWorkspaceStore((s) => s.updateWorkspaceEditors);
 
   const [busy, setBusy] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [updatingEditors, setUpdatingEditors] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   if (!workspace) return null;
 
@@ -47,6 +60,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
   const shareUrl = workspace.shareId ? buildShareUrl(workspace.shareId) : '';
   const tasksToShare = tasksOverride ?? storeTasks;
   const ownerName = user?.name || user?.email || 'Workspace Owner';
+  const editorEmails = normalizeEditorEmails(workspace.editorEmails);
 
   const handleToggleShare = async (nextEnabled: boolean) => {
     setBusy(true);
@@ -63,7 +77,12 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
         }
       } else {
         await disableSharing(workspace.id);
-        toast.info('Public link disabled', 'Previously shared URLs are no longer accessible.');
+        toast.info(
+          'Sharing disabled',
+          editorEmails.length > 0
+            ? 'Public link and collaborator edit access have been revoked.'
+            : 'Previously shared URLs are no longer accessible.',
+        );
       }
     } catch (err) {
       console.error('Failed to toggle sharing:', err);
@@ -96,6 +115,63 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
     }
   };
 
+  const handleInviteEditor = async (e: FormEvent) => {
+    e.preventDefault();
+    setEmailError(null);
+
+    const validation = validateEditorEmailInput(emailInput, editorEmails, user?.email);
+    if (!validation.valid) {
+      setEmailError(validation.error);
+      return;
+    }
+
+    setUpdatingEditors(true);
+    try {
+      const nextEmails = [...editorEmails, validation.email];
+      await updateWorkspaceEditors(
+        workspace.id,
+        tasksToShare,
+        getPreferencesSnapshot(),
+        ownerName,
+        nextEmails,
+      );
+      setEmailInput('');
+      toast.success(
+        'Editor invited',
+        `${validation.email} can now edit live via the share link or Shared with me.`,
+      );
+    } catch (err) {
+      console.error('Failed to invite editor:', err);
+      toast.error(
+        'Could not invite editor',
+        'Make sure your updated Firestore rules are deployed.',
+      );
+    } finally {
+      setUpdatingEditors(false);
+    }
+  };
+
+  const handleRemoveEditor = async (emailToRemove: string) => {
+    setUpdatingEditors(true);
+    setEmailError(null);
+    try {
+      const nextEmails = editorEmails.filter((email) => email !== emailToRemove);
+      await updateWorkspaceEditors(
+        workspace.id,
+        tasksToShare,
+        getPreferencesSnapshot(),
+        ownerName,
+        nextEmails,
+      );
+      toast.info('Editor removed', emailToRemove);
+    } catch (err) {
+      console.error('Failed to remove editor:', err);
+      toast.error('Could not remove editor', 'Please try again.');
+    } finally {
+      setUpdatingEditors(false);
+    }
+  };
+
   const handleCopy = async () => {
     if (!shareUrl) return;
     try {
@@ -112,7 +188,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Share Gantt Chart"
+      title="Share & Collaborate"
       description={workspace.title}
       maxWidth="md"
       icon={
@@ -123,7 +199,11 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
       footer={
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <span className="text-xs text-slate-500 dark:text-slate-400">
-            Shared as <strong className="font-semibold text-slate-700 dark:text-slate-200">{ownerName}</strong> · edit in Settings → Profile
+            Shared as{' '}
+            <strong className="font-semibold text-slate-700 dark:text-slate-200">
+              {ownerName}
+            </strong>{' '}
+            · edit in Settings → Profile
           </span>
           <Button variant="primary" size="md" onClick={onClose}>
             Done
@@ -132,12 +212,15 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
       }
     >
       <div className="p-6 sm:p-7 space-y-5">
-        {/* Public Toggle Card */}
+        {/* Public Read-Only Toggle Card */}
         <div className="flex items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025]">
           <div className="flex items-start gap-3.5 min-w-0">
             <div className="mt-0.5 shrink-0">
               {isShared ? (
-                <GlobeHemisphereWest weight="duotone" className="w-6 h-6 text-brand-600 dark:text-brand-400" />
+                <GlobeHemisphereWest
+                  weight="duotone"
+                  className="w-6 h-6 text-brand-600 dark:text-brand-400"
+                />
               ) : (
                 <LockKey weight="duotone" className="w-6 h-6 text-slate-400 dark:text-slate-500" />
               )}
@@ -156,7 +239,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
               </div>
               <p className="text-xs sm:text-[13px] text-slate-500 dark:text-slate-400 mt-1">
                 {isShared
-                  ? 'Anyone with the link can view updates live without signing in.'
+                  ? 'Anyone with the link can view updates live without signing in. Only invited editors can make changes.'
                   : 'Only you can access this workspace right now.'}
               </p>
             </div>
@@ -164,7 +247,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
 
           <Switch
             checked={isShared}
-            disabled={busy || regenerating}
+            disabled={busy || regenerating || updatingEditors}
             onChange={(checked) => void handleToggleShare(checked)}
             ariaLabel="Toggle public read-only link"
           />
@@ -180,7 +263,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
               transition={{ duration: 0.25, ease: STUDIO_EASE }}
               className="overflow-hidden"
             >
-              <div className="space-y-4 pt-1">
+              <div className="space-y-3 pt-0.5">
                 <div>
                   <label
                     htmlFor="share-link-url"
@@ -215,7 +298,7 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
                   <a
                     href={shareUrl}
                     target="_blank"
@@ -223,14 +306,14 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
                     className="inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 transition-colors"
                   >
                     <ArrowSquareOut weight="duotone" className="w-4 h-4" />
-                    Open public preview
+                    Open shared link
                   </a>
 
                   <Button
                     variant="ghost"
                     size="sm"
                     loading={regenerating}
-                    disabled={busy}
+                    disabled={busy || updatingEditors}
                     onClick={() => void handleRegenerate()}
                     leftIcon={<ArrowsClockwise weight="duotone" className="w-4 h-4" />}
                   >
@@ -241,6 +324,98 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Invited Editors Section */}
+        <div className="pt-4 border-t border-slate-200/80 dark:border-white/[0.08] space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <UsersThree
+                weight="duotone"
+                className="w-4 h-4 text-brand-600 dark:text-brand-400"
+              />
+              <h3 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                Invited Editors
+              </h3>
+            </div>
+            <span className="font-mono text-[11px] font-semibold text-slate-400 tabular-nums">
+              {editorEmails.length} / {MAX_EDITORS_PER_WORKSPACE}
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            Invite specific Google accounts to edit this project live across Timeline, Board, and
+            List views. Invited editors see it automatically under{' '}
+            <strong className="font-semibold text-slate-700 dark:text-slate-200">
+              Shared with me
+            </strong>{' '}
+            after signing in.
+          </p>
+
+          <form onSubmit={(e) => void handleInviteEditor(e)} className="flex items-center gap-2">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => {
+                setEmailInput(e.target.value);
+                setEmailError(null);
+              }}
+              placeholder="teammate@gmail.com"
+              aria-label="Collaborator Google email"
+              disabled={updatingEditors || busy}
+              className="flex-1 h-10 px-3.5 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <Button
+              type="submit"
+              variant="secondary"
+              size="md"
+              className="h-10 shrink-0"
+              loading={updatingEditors}
+              disabled={busy || regenerating || editorEmails.length >= MAX_EDITORS_PER_WORKSPACE}
+              leftIcon={<UserPlus weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />}
+            >
+              Invite
+            </Button>
+          </form>
+
+          {emailError && (
+            <p role="alert" className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+              <WarningCircle weight="duotone" className="w-3.5 h-3.5 shrink-0" />
+              {emailError}
+            </p>
+          )}
+
+          {editorEmails.length > 0 && (
+            <ul
+              aria-label="Invited editors list"
+              className="divide-y divide-slate-100 dark:divide-white/[0.06] rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.02] overflow-hidden"
+            >
+              {editorEmails.map((email) => (
+                <li
+                  key={email}
+                  className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-medium text-slate-800 dark:text-slate-100 truncate">
+                      {email}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300 text-[10px] font-semibold shrink-0">
+                      Editor
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={updatingEditors}
+                    onClick={() => void handleRemoveEditor(email)}
+                    aria-label={`Remove ${email}`}
+                    className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-500/15 transition-colors cursor-pointer disabled:opacity-40"
+                  >
+                    <X weight="bold" className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </Modal>
   );

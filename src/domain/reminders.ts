@@ -301,7 +301,7 @@ export function formatTelegramReminderMessage(
   }
 
   const lines: string[] = [
-    `<b>Gantt Deadline Reminder</b> (${items.length} ${items.length === 1 ? 'task' : 'tasks'})`,
+    `<b>Sked Deadline Reminder</b> (${items.length} ${items.length === 1 ? 'task' : 'tasks'})`,
     '',
   ];
 

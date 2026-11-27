@@ -24,7 +24,7 @@ describe('LegalPage Terms of Use & Privacy Policy', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /github issues/i })).toHaveAttribute(
       'href',
-      'https://github.com/ByteKen/ganttapp/issues',
+      'https://github.com/ByteKen/sked/issues',
     );
     expect(screen.queryByRole('link', { name: /@/i })).not.toBeInTheDocument();
   });

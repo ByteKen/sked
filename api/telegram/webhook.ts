@@ -140,7 +140,7 @@ async function handleCallbackQuery(
   if (!subDoc) {
     await answerTelegramCallbackQuery(
       cb.id,
-      'Your Telegram chat is not linked to Gantt. Connect from Settings -> Bot & Alerts.',
+      'Your Telegram chat is not linked to Sked. Connect from Settings -> Bot & Alerts.',
       true,
     );
     return;
@@ -377,10 +377,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await sendTelegramMessage(
           chatIdStr,
           [
-            '<b>👋 Welcome to Gantt Bot</b>',
+            '<b>👋 Welcome to Sked Bot</b>',
             '',
-            'To connect your account, open <b>Settings → Bot &amp; Alerts</b> in Gantt and click <b>Connect Telegram</b>.',
-            baseUrl ? `\n<a href="${baseUrl}">Open Gantt</a>` : '',
+            'To connect your account, open <b>Settings → Bot &amp; Alerts</b> in Sked and click <b>Connect Telegram</b>.',
+            baseUrl ? `\n<a href="${baseUrl}">Open Sked</a>` : '',
           ]
             .filter(Boolean)
             .join('\n'),
@@ -394,7 +394,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!tokenSnap.exists) {
         await sendTelegramMessage(
           chatIdStr,
-          '⚠️ This connection link is invalid or was already used. Please generate a fresh link from <b>Settings → Bot &amp; Alerts</b> in Gantt.',
+          '⚠️ This connection link is invalid or was already used. Please generate a fresh link from <b>Settings → Bot &amp; Alerts</b> in Sked.',
         );
         return res.status(200).json({ ok: true });
       }
@@ -405,7 +405,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (Date.now() > tokenData.expiresAtMs) {
         await sendTelegramMessage(
           chatIdStr,
-          '⏰ This connection link expired (links are valid for 15 minutes). Please click <b>Connect Telegram</b> again in Gantt Settings.',
+          '⏰ This connection link expired (links are valid for 15 minutes). Please click <b>Connect Telegram</b> again in Sked Settings.',
         );
         return res.status(200).json({ ok: true });
       }
@@ -450,7 +450,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sendTelegramMessage(
         chatIdStr,
         [
-          `<b>✅ Connected to Gantt!</b>`,
+          `<b>✅ Connected to Sked!</b>`,
           '',
           `Hi ${escapeTelegramHtml(firstName || username || 'there')} — your workspaces are now synced with Telegram:`,
           `• Alerts: <b>${escapeTelegramHtml(offsetsText)}</b>`,
@@ -483,7 +483,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!subDoc) {
       await sendTelegramMessage(
         chatIdStr,
-        'Your Telegram chat is not connected to a Gantt account yet. Open <b>Settings → Bot &amp; Alerts</b> in Gantt to link it.',
+        'Your Telegram chat is not connected to a Sked account yet. Open <b>Settings → Bot &amp; Alerts</b> in Sked to link it.',
       );
       return res.status(200).json({ ok: true });
     }
@@ -559,7 +559,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ]);
       await sendTelegramMessage(
         chatIdStr,
-        '🔌 Disconnected from Gantt. You will no longer receive deadline notifications.',
+        '🔌 Disconnected from Sked. You will no longer receive deadline notifications.',
       );
       return res.status(200).json({ ok: true });
     }

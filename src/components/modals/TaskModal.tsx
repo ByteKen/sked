@@ -14,9 +14,10 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { formatFullDate } from '@/domain/timeline';
+import { findTaskById } from '@/domain/taskTree';
+import { buildDraftDefaultsForStatus } from '@/domain/taskViews';
 import { validateTaskDraft, type FieldValidationResult } from '@/domain/validation';
-import { useGanttStore } from '@/store/ganttStore';
-import type { Task, TaskDraft } from '@/types';
+import type { Task, TaskDraft, TaskStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { SPRING_SNAPPY, STUDIO_EASE } from '@/utils/motion';
 
@@ -26,6 +27,7 @@ export interface TaskModalProps {
   allTasks: readonly Task[];
   isSubtask?: boolean;
   parentTask?: Task | null;
+  initialStatus?: TaskStatus | null;
   onSave: (draft: TaskDraft) => void;
   onClose: () => void;
 }
@@ -36,19 +38,23 @@ export function TaskModal({
   allTasks,
   isSubtask = false,
   parentTask = null,
+  initialStatus = null,
   onSave,
   onClose,
 }: TaskModalProps) {
-  const findTaskById = useGanttStore((s) => s.findTaskById);
-  const parent = parentTask ?? (task?.parentId ? findTaskById(task.parentId) : null);
+  const parent = parentTask ?? (task?.parentId ? findTaskById(allTasks, task.parentId) : null);
   const hasChildren = Boolean(task?.children && task.children.length > 0);
   const effectiveIsSubtask = isSubtask || Boolean(parent);
 
+  const statusDefaults = !task && initialStatus ? buildDraftDefaultsForStatus(initialStatus) : null;
+
   const [isDeadlineOnly, setIsDeadlineOnly] = useState<boolean>(Boolean(task?.isDeadline));
   const [isDone, setIsDone] = useState<boolean>(
-    Boolean(task?.isDone || (task && task.progress === 100)),
+    Boolean(task ? task.isDone || task.progress === 100 : statusDefaults?.isDone),
   );
-  const [isWorking, setIsWorking] = useState<boolean>(Boolean(task?.isWorking));
+  const [isWorking, setIsWorking] = useState<boolean>(
+    Boolean(task ? task.isWorking : statusDefaults?.isWorking),
+  );
   const [validationError, setValidationError] = useState<FieldValidationResult | null>(null);
 
   const [formData, setFormData] = useState<TaskDraft>({
@@ -56,11 +62,11 @@ export function TaskModal({
     description: task?.description ?? '',
     start: task?.start ?? parent?.start ?? '',
     end: task?.end ?? parent?.end ?? '',
-    progress: task?.progress ?? 0,
+    progress: task?.progress ?? statusDefaults?.progress ?? 0,
     isMilestone: Boolean(task?.isMilestone),
     isDeadline: Boolean(task?.isDeadline),
-    isDone: Boolean(task?.isDone),
-    isWorking: Boolean(task?.isWorking),
+    isDone: Boolean(task?.isDone ?? statusDefaults?.isDone),
+    isWorking: Boolean(task?.isWorking ?? statusDefaults?.isWorking),
     dependencies: task?.dependencies ? [...task.dependencies] : [],
   });
 
@@ -126,7 +132,7 @@ export function TaskModal({
       end: formData.end,
       isDeadline: isDeadlineOnly,
       isDone: effectiveIsSubtask ? isDone : progress === 100,
-      isWorking: effectiveIsSubtask ? (isDone ? false : isWorking) : false,
+      isWorking: effectiveIsSubtask ? (isDone ? false : isWorking) : progress === 100 ? false : isWorking,
       progress,
     });
   };
@@ -429,17 +435,33 @@ export function TaskModal({
             </div>
           </div>
         ) : (
-          <div className="space-y-2 p-4 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025]">
-            <div className="flex items-center justify-between">
+          <div className="space-y-3 p-4 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025]">
+            <div className="flex items-center justify-between gap-2">
               <label
                 htmlFor="task-progress-range"
                 className="text-xs font-semibold text-slate-700 dark:text-slate-300"
               >
                 Completion Progress
               </label>
-              <span className="font-mono text-xs font-bold text-brand-600 dark:text-brand-400 tabular-nums">
-                {formData.progress}%
-              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={formData.progress === 100}
+                  onClick={() => setIsWorking((v) => !v)}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer disabled:opacity-40',
+                    isWorking && formData.progress < 100
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'bg-white dark:bg-white/[0.04] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/[0.08]',
+                  )}
+                >
+                  <PlayCircle weight="duotone" className="w-3.5 h-3.5" />
+                  {isWorking && formData.progress < 100 ? 'Working Now' : 'Mark Working'}
+                </button>
+                <span className="font-mono text-xs font-bold text-brand-600 dark:text-brand-400 tabular-nums w-9 text-right">
+                  {formData.progress}%
+                </span>
+              </div>
             </div>
             <input
               id="task-progress-range"

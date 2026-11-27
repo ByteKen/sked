@@ -1,22 +1,34 @@
 import {
+  collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
+  query,
+  runTransaction,
   setDoc,
   updateDoc,
+  where,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { sanitizeTaskTree } from '@/domain/taskTree';
+import {
+  haveTasksChanged,
+  normalizeEditorEmails,
+  normalizeEmail,
+} from '@/domain/collaboration';
+import { getMaxTaskId, sanitizeTaskTree } from '@/domain/taskTree';
 import {
   DEFAULT_PREFERENCES,
+  type ChartEditorAttribution,
   type SharedChart,
   type SharedChartViewPrefs,
   type Task,
   type UserPreferences,
   type Workspace,
+  type WorkspaceBaseline,
 } from '@/types';
-import { updateWorkspaceInFirestore } from './userRepository';
+import { saveWorkspaceTasksInFirestore, updateWorkspaceInFirestore } from './userRepository';
 
 const SHARE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 const SHARE_ID_LENGTH = 16;
@@ -58,18 +70,44 @@ export function extractSharedViewPrefs(prefs: Partial<UserPreferences>): SharedC
   };
 }
 
+function hydrateSharedChart(shareId: string, raw: Partial<SharedChart>): SharedChart {
+  const tasks = Array.isArray(raw.tasks) ? sanitizeTaskTree(raw.tasks) : [];
+  return {
+    shareId: raw.shareId || shareId,
+    ownerId: raw.ownerId || '',
+    ownerName: raw.ownerName || 'Workspace Owner',
+    workspaceId: raw.workspaceId || '',
+    title: raw.title || 'Shared Project',
+    tasks,
+    nextId:
+      typeof raw.nextId === 'number' && Number.isFinite(raw.nextId)
+        ? Math.max(raw.nextId, getMaxTaskId(tasks) + 1)
+        : getMaxTaskId(tasks) + 1,
+    version: typeof raw.version === 'number' && Number.isFinite(raw.version) ? raw.version : 1,
+    editorEmails: normalizeEditorEmails(raw.editorEmails),
+    lastEditedBy: raw.lastEditedBy ?? null,
+    preferences: extractSharedViewPrefs(raw.preferences ?? {}),
+    baseline: raw.baseline ?? null,
+    createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+  };
+}
+
 export interface EnableShareParams {
   uid: string;
   ownerName: string;
   workspace: Workspace;
   tasks: readonly Task[];
   preferences: UserPreferences;
+  editorEmails?: readonly string[];
 }
 
 export async function enableWorkspaceShare(params: EnableShareParams): Promise<Workspace> {
   const { uid, ownerName, workspace, tasks, preferences } = params;
   const shareId = workspace.shareId || generateShareId();
   const now = new Date().toISOString();
+  const sanitizedTasks = sanitizeTaskTree(tasks);
+  const editorEmails = normalizeEditorEmails(params.editorEmails ?? workspace.editorEmails);
 
   const sharedDoc: SharedChart = {
     shareId,
@@ -77,8 +115,13 @@ export async function enableWorkspaceShare(params: EnableShareParams): Promise<W
     ownerName,
     workspaceId: workspace.id,
     title: workspace.title,
-    tasks: sanitizeTaskTree(tasks),
+    tasks: sanitizedTasks,
+    nextId: getMaxTaskId(sanitizedTasks) + 1,
+    version: 1,
+    editorEmails,
+    lastEditedBy: null,
     preferences: extractSharedViewPrefs(preferences),
+    ...(workspace.baseline ? { baseline: workspace.baseline } : {}),
     createdAt: workspace.sharedAt || now,
     updatedAt: now,
   };
@@ -89,6 +132,7 @@ export async function enableWorkspaceShare(params: EnableShareParams): Promise<W
     shareId,
     isShared: true,
     sharedAt: sharedDoc.createdAt,
+    editorEmails,
   });
 }
 
@@ -97,6 +141,8 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
   const previousShareId = workspace.shareId;
   const nextShareId = generateShareId();
   const now = new Date().toISOString();
+  const sanitizedTasks = sanitizeTaskTree(tasks);
+  const editorEmails = normalizeEditorEmails(params.editorEmails ?? workspace.editorEmails);
 
   const sharedDoc: SharedChart = {
     shareId: nextShareId,
@@ -104,8 +150,13 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
     ownerName,
     workspaceId: workspace.id,
     title: workspace.title,
-    tasks: sanitizeTaskTree(tasks),
+    tasks: sanitizedTasks,
+    nextId: getMaxTaskId(sanitizedTasks) + 1,
+    version: 1,
+    editorEmails,
+    lastEditedBy: null,
     preferences: extractSharedViewPrefs(preferences),
+    ...(workspace.baseline ? { baseline: workspace.baseline } : {}),
     createdAt: now,
     updatedAt: now,
   };
@@ -116,6 +167,7 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
     shareId: nextShareId,
     isShared: true,
     sharedAt: now,
+    editorEmails,
   });
 
   if (previousShareId && previousShareId !== nextShareId) {
@@ -129,15 +181,62 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
   return updatedWorkspace;
 }
 
+/**
+ * Updates invited collaborator emails for a workspace.
+ * Automatically enables sharing if the owner invites an editor before toggling the link on.
+ */
+export async function updateWorkspaceEditorEmails(
+  params: EnableShareParams & { editorEmails: readonly string[] },
+): Promise<Workspace> {
+  const { uid, workspace } = params;
+  const normalized = normalizeEditorEmails(params.editorEmails);
+
+  if (!workspace.isShared || !workspace.shareId) {
+    if (normalized.length === 0) {
+      return updateWorkspaceInFirestore(uid, workspace, { editorEmails: [] });
+    }
+    return enableWorkspaceShare({ ...params, editorEmails: normalized });
+  }
+
+  await updateDoc(doc(db, 'sharedCharts', workspace.shareId), {
+    editorEmails: normalized,
+    updatedAt: new Date().toISOString(),
+  });
+
+  return updateWorkspaceInFirestore(uid, workspace, { editorEmails: normalized });
+}
+
 export async function disableWorkspaceShare(
   uid: string,
   workspace: Workspace,
-): Promise<Workspace> {
+): Promise<{ workspace: Workspace; recoveredTasks: Task[] | null }> {
   const shareIdToDelete = workspace.shareId;
+  let recoveredTasks: Task[] | null = null;
+
+  // Preserve any collaborator edits into the owner's private doc BEFORE removing the shared doc
+  if (shareIdToDelete && normalizeEditorEmails(workspace.editorEmails).length > 0) {
+    try {
+      const snap = await getDoc(doc(db, 'sharedCharts', shareIdToDelete));
+      if (snap.exists()) {
+        const hydrated = hydrateSharedChart(shareIdToDelete, snap.data() as Partial<SharedChart>);
+        recoveredTasks = hydrated.tasks;
+        await saveWorkspaceTasksInFirestore(
+          uid,
+          workspace.id,
+          hydrated.tasks,
+          hydrated.nextId ?? getMaxTaskId(hydrated.tasks) + 1,
+        );
+      }
+    } catch (err) {
+      console.warn('Could not snapshot collaborative tasks before disabling share:', err);
+    }
+  }
+
   const updatedWorkspace = await updateWorkspaceInFirestore(uid, workspace, {
     isShared: false,
     shareId: null,
     sharedAt: null,
+    editorEmails: [],
   });
 
   if (shareIdToDelete) {
@@ -148,7 +247,7 @@ export async function disableWorkspaceShare(
     }
   }
 
-  return updatedWorkspace;
+  return { workspace: updatedWorkspace, recoveredTasks };
 }
 
 export async function deleteOrphanedShareDoc(shareId: string | null | undefined): Promise<void> {
@@ -164,7 +263,10 @@ export interface SharedChartSyncPatch {
   title?: string;
   ownerName?: string;
   tasks?: readonly Task[];
+  nextId?: number;
   preferences?: SharedChartViewPrefs;
+  baseline?: WorkspaceBaseline | null;
+  editorEmails?: readonly string[];
 }
 
 /**
@@ -186,10 +288,18 @@ export async function syncSharedChart(
     payload.ownerName = patch.ownerName;
   }
   if (patch.tasks !== undefined) {
-    payload.tasks = sanitizeTaskTree(patch.tasks);
+    const clean = sanitizeTaskTree(patch.tasks);
+    payload.tasks = clean;
+    payload.nextId = patch.nextId ?? getMaxTaskId(clean) + 1;
   }
   if (patch.preferences !== undefined) {
     payload.preferences = patch.preferences;
+  }
+  if (patch.baseline !== undefined) {
+    payload.baseline = patch.baseline;
+  }
+  if (patch.editorEmails !== undefined) {
+    payload.editorEmails = normalizeEditorEmails(patch.editorEmails);
   }
 
   try {
@@ -197,6 +307,88 @@ export async function syncSharedChart(
   } catch (err) {
     console.warn('Live share sync skipped:', err);
   }
+}
+
+export interface CollaborativeChartMutationResult {
+  tasks: Task[];
+  nextId: number;
+  baseline?: WorkspaceBaseline | null;
+}
+
+/**
+ * Conflict-safe, quota-efficient collaborative mutation on `sharedCharts/{shareId}`.
+ * Runs inside a Firestore transaction (1 read + 1 write) against the latest server state so
+ * concurrent editors mutating different tasks never overwrite each other's changes.
+ */
+export async function commitCollaborativeChartMutation(params: {
+  shareId: string;
+  editor: Omit<ChartEditorAttribution, 'at'>;
+  mutate: (current: {
+    tasks: Task[];
+    nextId: number;
+    baseline: WorkspaceBaseline | null;
+  }) => CollaborativeChartMutationResult | null;
+}): Promise<{ tasks: Task[]; nextId: number; version: number } | null> {
+  const { shareId, editor, mutate } = params;
+  const shareRef = doc(db, 'sharedCharts', shareId);
+
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(shareRef);
+    if (!snap.exists()) return null;
+
+    const current = hydrateSharedChart(shareId, snap.data() as Partial<SharedChart>);
+    const currentNextId = current.nextId ?? getMaxTaskId(current.tasks) + 1;
+    const outcome = mutate({
+      tasks: current.tasks,
+      nextId: currentNextId,
+      baseline: current.baseline ?? null,
+    });
+    if (!outcome) return null;
+
+    const sanitizedTasks = sanitizeTaskTree(outcome.tasks);
+    const nextBaseline =
+      outcome.baseline !== undefined ? outcome.baseline : (current.baseline ?? null);
+    const tasksChanged = haveTasksChanged(current.tasks, sanitizedTasks);
+    const baselineChanged =
+      outcome.baseline !== undefined &&
+      JSON.stringify(current.baseline ?? null) !== JSON.stringify(nextBaseline);
+
+    if (!tasksChanged && !baselineChanged) {
+      return {
+        tasks: current.tasks,
+        nextId: currentNextId,
+        version: current.version ?? 1,
+      };
+    }
+
+    const now = new Date().toISOString();
+    const nextVersion = (current.version ?? 1) + 1;
+    const resolvedNextId = Math.max(outcome.nextId, getMaxTaskId(sanitizedTasks) + 1);
+    const attribution: ChartEditorAttribution = {
+      uid: editor.uid,
+      name: editor.name,
+      ...(editor.email ? { email: normalizeEmail(editor.email) } : {}),
+      at: now,
+    };
+
+    const patch: Record<string, unknown> = {
+      tasks: sanitizedTasks,
+      nextId: resolvedNextId,
+      version: nextVersion,
+      lastEditedBy: attribution,
+      updatedAt: now,
+    };
+    if (outcome.baseline !== undefined) {
+      patch.baseline = nextBaseline;
+    }
+
+    tx.update(shareRef, patch);
+    return {
+      tasks: sanitizedTasks,
+      nextId: resolvedNextId,
+      version: nextVersion,
+    };
+  });
 }
 
 /**
@@ -225,23 +417,52 @@ export function subscribeToSharedChart(
         onData(null);
         return;
       }
-      const raw = snapshot.data() as Partial<SharedChart>;
-      const chart: SharedChart = {
-        shareId: raw.shareId || shareId,
-        ownerId: raw.ownerId || '',
-        ownerName: raw.ownerName || 'Workspace Owner',
-        workspaceId: raw.workspaceId || '',
-        title: raw.title || 'Shared Gantt Chart',
-        tasks: Array.isArray(raw.tasks) ? sanitizeTaskTree(raw.tasks) : [],
-        preferences: extractSharedViewPrefs(raw.preferences ?? {}),
-        createdAt: raw.createdAt || new Date().toISOString(),
-        updatedAt: raw.updatedAt || new Date().toISOString(),
-      };
-      onData(chart);
+      onData(hydrateSharedChart(shareId, snapshot.data() as Partial<SharedChart>));
     },
     (error) => {
       console.error('Shared chart subscription error:', error);
       onError(error);
+    },
+  );
+}
+
+/**
+ * Subscribes to all shared charts where the signed-in user's Google email is listed as an editor.
+ * Uses a single-field array-contains query (1 read per shared workspace, zero composite index needed).
+ */
+export function subscribeToSharedWithMeCharts(
+  userEmail: string,
+  onData: (charts: SharedChart[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  const normalized = normalizeEmail(userEmail);
+  if (!normalized) {
+    onData([]);
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, 'sharedCharts'),
+    where('editorEmails', 'array-contains', normalized),
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const charts: SharedChart[] = [];
+      snapshot.forEach((docSnap) => {
+        charts.push(hydrateSharedChart(docSnap.id, docSnap.data() as Partial<SharedChart>));
+      });
+      charts.sort(
+        (a, b) =>
+          new Date(b.updatedAt || b.createdAt).getTime() -
+          new Date(a.updatedAt || a.createdAt).getTime(),
+      );
+      onData(charts);
+    },
+    (error) => {
+      console.warn('Shared-with-me subscription error:', error);
+      onError?.(error);
     },
   );
 }

@@ -20,6 +20,8 @@ export interface DependencyLayerProps {
   showDependencyLines: boolean;
   showSubtaskConnectors: boolean;
   showTaskDescriptions: boolean;
+  showCriticalPath?: boolean;
+  criticalEdgeKeys?: ReadonlySet<string>;
   totalWidth: number;
   totalHeight: number;
 }
@@ -39,6 +41,8 @@ export const DependencyLayer = memo(function DependencyLayer({
   showDependencyLines,
   showSubtaskConnectors,
   showTaskDescriptions,
+  showCriticalPath = false,
+  criticalEdgeKeys,
   totalWidth,
   totalHeight,
 }: DependencyLayerProps) {
@@ -89,6 +93,7 @@ export const DependencyLayer = memo(function DependencyLayer({
 
     const computedDeps: Array<{
       key: string;
+      edgeKey: string;
       d: string;
       fromX: number;
       fromY: number;
@@ -128,6 +133,7 @@ export const DependencyLayer = memo(function DependencyLayer({
 
           computedDeps.push({
             key: `dep-${depId}-${task.id}`,
+            edgeKey: `${depId}->${task.id}`,
             d: routed.svgPath,
             fromX: source.right,
             fromY: source.centerY,
@@ -191,23 +197,44 @@ export const DependencyLayer = memo(function DependencyLayer({
         />
       ))}
 
-      {depPaths.map((dep) => (
-        <g key={dep.key}>
-          <path
-            d={dep.d}
-            fill="none"
-            className="stroke-brand-500/80 dark:stroke-brand-400/85"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <circle cx={dep.fromX} cy={dep.fromY} r="3" className="fill-brand-600 dark:fill-brand-400" />
-          <polygon
-            points={`${dep.toX},${dep.toY} ${dep.toX - 7},${dep.toY - 4} ${dep.toX - 7},${dep.toY + 4}`}
-            className="fill-brand-600 dark:fill-brand-400"
-          />
-        </g>
-      ))}
+      {depPaths.map((dep) => {
+        const isCriticalEdge = Boolean(showCriticalPath && criticalEdgeKeys?.has(dep.edgeKey));
+        const dimmed = Boolean(showCriticalPath && !isCriticalEdge);
+        return (
+          <g key={dep.key} opacity={dimmed ? 0.25 : 1}>
+            <path
+              d={dep.d}
+              fill="none"
+              className={
+                isCriticalEdge
+                  ? 'stroke-rose-500 dark:stroke-rose-400'
+                  : 'stroke-brand-500/80 dark:stroke-brand-400/85'
+              }
+              strokeWidth={isCriticalEdge ? '2.3' : '1.75'}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle
+              cx={dep.fromX}
+              cy={dep.fromY}
+              r={isCriticalEdge ? '3.5' : '3'}
+              className={
+                isCriticalEdge
+                  ? 'fill-rose-600 dark:fill-rose-400'
+                  : 'fill-brand-600 dark:fill-brand-400'
+              }
+            />
+            <polygon
+              points={`${dep.toX},${dep.toY} ${dep.toX - 7},${dep.toY - 4} ${dep.toX - 7},${dep.toY + 4}`}
+              className={
+                isCriticalEdge
+                  ? 'fill-rose-600 dark:fill-rose-400'
+                  : 'fill-brand-600 dark:fill-brand-400'
+              }
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 });

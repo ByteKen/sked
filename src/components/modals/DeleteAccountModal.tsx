@@ -119,7 +119,7 @@ export function DeleteAccountModal({ isOpen, onClose, onDeleted }: DeleteAccount
           <ul className="space-y-1.5 text-xs sm:text-[13px] text-rose-900/90 dark:text-rose-200/90 list-disc pl-5">
             <li>All workspaces, tasks, nested subtasks, dates, and dependencies.</li>
             <li>All public read-only share links will be immediately invalidated.</li>
-            <li>Your Gantt account record and synced display preferences.</li>
+            <li>Your Sked account record and synced display preferences.</li>
           </ul>
         </div>
 

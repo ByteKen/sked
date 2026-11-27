@@ -59,7 +59,7 @@ describe('SettingsModal tabbed layout & Profile display name', () => {
 
     // Switch to Display tab
     fireEvent.click(screen.getByRole('tab', { name: /display/i }));
-    expect(screen.getByText(/studio dark mode/i)).toBeInTheDocument();
+    expect(screen.getByText(/^dark mode$/i)).toBeInTheDocument();
 
     // Switch to Export tab
     fireEvent.click(screen.getByRole('tab', { name: /export/i }));

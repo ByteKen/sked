@@ -240,4 +240,203 @@ describe('GanttWorkspace unified split-pane alignment', () => {
       });
     }
   });
+
+  it('toggles Critical Path highlighting, renders Planned Baseline ghost bars & slip badges, and supports bar drag-to-reschedule', async () => {
+    const user = userEvent.setup();
+    const onRescheduleTask = vi.fn();
+
+    render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        onRescheduleTask={onRescheduleTask}
+        baseline={{
+          savedAt: '2026-01-01T00:00:00Z',
+          entries: {
+            1: { start: '2026-01-05', end: '2026-01-18' },
+            2: { start: '2026-01-05', end: '2026-01-10' },
+            3: { start: '2026-01-11', end: '2026-01-18' },
+          },
+        }}
+        onSaveBaseline={vi.fn()}
+        onClearBaseline={vi.fn()}
+      />,
+    );
+
+    // 1. Toggle Critical Path ON -> marks finish-driving task bars with data-critical="true"
+    const cpmBtn = screen.getByRole('button', { name: /highlight critical path/i });
+    await user.click(cpmBtn);
+    expect(screen.getByRole('button', { name: /hide critical path/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const ciBar = screen.getByRole('button', { name: /CI Pipeline:/i });
+    expect(ciBar).toHaveAttribute('data-critical', 'true');
+
+    // 2. Open Baseline menu & show ghost bars -> renders ghost bar + "+2d" slip badge
+    await user.click(screen.getByRole('button', { name: /baseline options/i }));
+    await user.click(screen.getByRole('menuitem', { name: /show ghost bars/i }));
+    expect(screen.getByTestId('baseline-ghost-3')).toBeInTheDocument();
+    expect(screen.getAllByText('+2d').length).toBeGreaterThanOrEqual(1);
+
+    // 3. Drag CI Pipeline bar +80px right (Days view at 100% zoom = 40px/day -> +2 days)
+    fireEvent.pointerDown(ciBar, { clientX: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 180 });
+    fireEvent.pointerUp(window, { clientX: 180 });
+
+    expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-13', '2026-01-22', true);
+  });
+
+  it('cancels an active bar drag when Escape is pressed without saving changes', () => {
+    const onRescheduleTask = vi.fn();
+
+    render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        onRescheduleTask={onRescheduleTask}
+      />,
+    );
+
+    const ciBar = screen.getByRole('button', { name: /CI Pipeline:/i });
+    fireEvent.pointerDown(ciBar, { clientX: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 180 });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.pointerUp(window, { clientX: 180 });
+
+    expect(onRescheduleTask).not.toHaveBeenCalled();
+  });
+
+  it('yields immediate touch swipes to native scrolling and arms touch drag only after a brief hold', () => {
+    vi.useFakeTimers();
+    try {
+      const onRescheduleTask = vi.fn();
+
+      render(
+        <GanttWorkspace
+          tasks={tasksFixture}
+          selectedTaskId={null}
+          onSelectTask={vi.fn()}
+          onTaskActivate={vi.fn()}
+          onRescheduleTask={onRescheduleTask}
+        />,
+      );
+
+      const ciBar = screen.getByRole('button', { name: /CI Pipeline:/i });
+
+      // 1. Immediate touch swipe (> 8px before 260ms) cancels drag so scrolling stays native
+      fireEvent.pointerDown(ciBar, {
+        clientX: 100,
+        clientY: 50,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'touch',
+        isPrimary: true,
+      });
+      fireEvent.pointerMove(window, {
+        clientX: 160,
+        clientY: 52,
+        pointerId: 1,
+        pointerType: 'touch',
+      });
+      fireEvent.pointerUp(window, { clientX: 160, pointerId: 1, pointerType: 'touch' });
+      expect(onRescheduleTask).not.toHaveBeenCalled();
+
+      // 2. Stationary touch hold (>= 260ms) arms drag and reschedules cleanly
+      fireEvent.pointerDown(ciBar, {
+        clientX: 100,
+        clientY: 50,
+        button: 0,
+        pointerId: 2,
+        pointerType: 'touch',
+        isPrimary: true,
+      });
+      act(() => {
+        vi.advanceTimersByTime(280);
+      });
+      fireEvent.pointerMove(window, {
+        clientX: 180,
+        clientY: 50,
+        pointerId: 2,
+        pointerType: 'touch',
+      });
+      fireEvent.pointerUp(window, { clientX: 180, pointerId: 2, pointerType: 'touch' });
+
+      expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-13', '2026-01-22', true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('provides a compact mobile Tools popover for Critical Path, Baseline, and Auto-Cascade on narrow screens', async () => {
+    const originalMatchMedia = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(max-width: 767px)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    try {
+      const user = userEvent.setup();
+      render(
+        <GanttWorkspace
+          tasks={tasksFixture}
+          selectedTaskId={null}
+          onSelectTask={vi.fn()}
+          onTaskActivate={vi.fn()}
+          onRescheduleTask={vi.fn()}
+          baseline={{
+            savedAt: '2026-01-01T00:00:00Z',
+            entries: {
+              3: { start: '2026-01-11', end: '2026-01-18' },
+            },
+          }}
+          onSaveBaseline={vi.fn()}
+          onClearBaseline={vi.fn()}
+          mobileView="chart"
+        />,
+      );
+
+      // Open mobile Tools popover
+      await user.click(screen.getByRole('button', { name: /timeline view tools/i }));
+      expect(screen.getByRole('dialog', { name: /timeline view tools/i })).toBeInTheDocument();
+
+      // Toggle Critical Path and Baseline Ghost Bars from the mobile popover
+      await user.click(screen.getByRole('switch', { name: /highlight critical path/i }));
+      expect(screen.getByRole('button', { name: /CI Pipeline:/i })).toHaveAttribute(
+        'data-critical',
+        'true',
+      );
+
+      await user.click(screen.getByRole('switch', { name: /show baseline ghost bars/i }));
+      expect(screen.getByTestId('baseline-ghost-3')).toBeInTheDocument();
+
+      // Auto-Cascade toggle is accessible on mobile too
+      const cascadeSwitch = screen.getByRole('switch', {
+        name: /disable auto-cascade dependent tasks/i,
+      });
+      expect(cascadeSwitch).toHaveAttribute('aria-checked', 'true');
+      await user.click(cascadeSwitch);
+      expect(
+        screen.getByRole('switch', { name: /enable auto-cascade dependent tasks/i }),
+      ).toHaveAttribute('aria-checked', 'false');
+    } finally {
+      Object.defineProperty(window, 'matchMedia', {
+        writable: true,
+        value: originalMatchMedia,
+      });
+    }
+  });
 });

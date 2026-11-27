@@ -13,6 +13,7 @@ import {
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Badge } from '@/components/ui/Badge';
+import { HEALTH_LABELS, type WorkspaceHealthSummary } from '@/domain/projectHealth';
 import type { TaskStats, Workspace } from '@/types';
 import { cn } from '@/utils/cn';
 import { POPOVER_VARIANTS, SPRING_SNAPPY } from '@/utils/motion';
@@ -20,6 +21,7 @@ import { POPOVER_VARIANTS, SPRING_SNAPPY } from '@/utils/motion';
 export interface WorkspaceCardProps {
   workspace: Workspace;
   stats?: TaskStats;
+  health?: WorkspaceHealthSummary;
   accentIndex: number;
   isEditing: boolean;
   editingName: string;
@@ -54,6 +56,7 @@ const PREVIEW_LAYOUTS = [
 export function WorkspaceCard({
   workspace,
   stats,
+  health,
   accentIndex,
   isEditing,
   editingName,
@@ -70,6 +73,22 @@ export function WorkspaceCard({
   const bars = PREVIEW_LAYOUTS[accentIndex % PREVIEW_LAYOUTS.length] ?? PREVIEW_LAYOUTS[0]!;
   const taskCount = stats?.total ?? 0;
   const percent = stats?.completionPercent ?? 0;
+
+  const healthBadgeClass =
+    health?.health === 'off-track'
+      ? 'bg-rose-50/95 text-rose-700 border-rose-200/90 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/35'
+      : health?.health === 'at-risk'
+        ? 'bg-amber-50/95 text-amber-800 border-amber-200/90 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/35'
+        : health?.health === 'completed' || health?.health === 'on-track'
+          ? 'bg-emerald-50/95 text-emerald-700 border-emerald-200/90 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/35'
+          : null;
+
+  const healthDotClass =
+    health?.health === 'off-track'
+      ? 'bg-rose-500'
+      : health?.health === 'at-risk'
+        ? 'bg-amber-500'
+        : 'bg-emerald-500';
 
   const stopAnd = (fn: () => void) => (e: MouseEvent) => {
     e.stopPropagation();
@@ -113,6 +132,21 @@ export function WorkspaceCard({
             />
           ))}
         </div>
+
+        {/* Top-left health indicator */}
+        {health && health.health !== 'empty' && healthBadgeClass && (
+          <div className="absolute top-2.5 left-2.5">
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-semibold backdrop-blur-sm shadow-surface-sm',
+                healthBadgeClass,
+              )}
+            >
+              <span className={cn('w-1.5 h-1.5 rounded-full', healthDotClass)} />
+              {HEALTH_LABELS[health.health]}
+            </span>
+          </div>
+        )}
 
         {/* Top-right controls */}
         <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
@@ -260,6 +294,26 @@ export function WorkspaceCard({
 
         {/* Bottom Progress & Task Count */}
         <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
+          {health && (health.overdueCount > 0 || health.maxBaselineSlipDays > 0 || health.dueTodayCount > 0) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {health.overdueCount > 0 && (
+                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300 tabular-nums">
+                  {health.overdueCount} overdue
+                </span>
+              )}
+              {health.dueTodayCount > 0 && (
+                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 tabular-nums">
+                  {health.dueTodayCount} due today
+                </span>
+              )}
+              {health.maxBaselineSlipDays > 0 && (
+                <span className="font-mono text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300 tabular-nums">
+                  +{health.maxBaselineSlipDays}d vs plan
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono font-medium text-slate-600 dark:text-slate-300 tabular-nums">
               {taskCount} {taskCount === 1 ? 'task' : 'tasks'}

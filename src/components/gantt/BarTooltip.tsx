@@ -3,13 +3,25 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getTaskStatus } from '@/domain/taskTree';
 import { formatDateRange } from '@/domain/timeline';
-import type { FlatTask } from '@/types';
+import type { FlatTask, TaskBaselineEntry } from '@/types';
 import { cn } from '@/utils/cn';
 import { SPRING_SNAPPY } from '@/utils/motion';
 import { STATUS_BAR_STYLES } from './ganttStyles';
 
+export interface BarTooltipMeta {
+  isCritical?: boolean;
+  slackDays?: number | null;
+  baselineEntry?: TaskBaselineEntry | null;
+  slipDays?: number | null;
+}
+
 export interface BarTooltipHandle {
-  show: (task: FlatTask, durationDays: number, anchorRect: DOMRect) => void;
+  show: (
+    task: FlatTask,
+    durationDays: number,
+    anchorRect: DOMRect,
+    meta?: BarTooltipMeta,
+  ) => void;
   hide: () => void;
 }
 
@@ -19,6 +31,7 @@ interface TooltipState {
   x: number;
   y: number;
   placeBelow: boolean;
+  meta?: BarTooltipMeta;
 }
 
 /**
@@ -32,14 +45,11 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
     useImperativeHandle(
       ref,
       () => ({
-        show: (task, durationDays, anchorRect) => {
+        show: (task, durationDays, anchorRect, meta) => {
           const placeBelow = anchorRect.top < 240;
-          const clampedX = Math.max(
-            12,
-            Math.min(window.innerWidth - 268, anchorRect.left),
-          );
+          const clampedX = Math.max(12, Math.min(window.innerWidth - 280, anchorRect.left));
           const y = placeBelow ? anchorRect.bottom + 8 : anchorRect.top - 8;
-          setState({ task, durationDays, x: clampedX, y, placeBelow });
+          setState({ task, durationDays, x: clampedX, y, placeBelow, meta });
         },
         hide: () => setState(null),
       }),
@@ -48,6 +58,7 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
 
     const status = state ? getTaskStatus(state.task) : null;
     const style = status ? STATUS_BAR_STYLES[status] : null;
+    const meta = state?.meta;
 
     return createPortal(
       <AnimatePresence>
@@ -66,7 +77,7 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96 }}
               transition={SPRING_SNAPPY}
-              className="w-64 rounded-xl border border-slate-200/90 dark:border-white/[0.12] bg-white dark:bg-surface-elevated px-3.5 py-2.5 shadow-surface-lg dark:shadow-dark-lg"
+              className="w-[272px] rounded-xl border border-slate-200/90 dark:border-white/[0.12] bg-white dark:bg-surface-elevated px-3.5 py-2.5 shadow-surface-lg dark:shadow-dark-lg"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-xs font-semibold text-slate-900 dark:text-slate-50 leading-snug line-clamp-2">
@@ -82,6 +93,49 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
                 {state.durationDays === 1 ? 'day' : 'days'}
               </p>
 
+              {/* Critical Path / Slack metadata */}
+              {meta && (meta.isCritical || typeof meta.slackDays === 'number') && (
+                <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  {meta.isCritical ? (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200/80 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-500/25">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                      Critical Path (0d slack)
+                    </span>
+                  ) : typeof meta.slackDays === 'number' ? (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-md font-mono text-[10px] font-medium bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300">
+                      {meta.slackDays}d float slack
+                    </span>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Baseline comparison */}
+              {meta?.baselineEntry && (
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] font-mono bg-slate-50 dark:bg-white/[0.03] border border-slate-200/70 dark:border-white/[0.06] rounded-lg px-2 py-1">
+                  <span className="text-slate-500 dark:text-slate-400 truncate">
+                    Plan: {formatDateRange(meta.baselineEntry.start, meta.baselineEntry.end)}
+                  </span>
+                  {typeof meta.slipDays === 'number' && (
+                    <span
+                      className={cn(
+                        'font-semibold shrink-0 tabular-nums',
+                        meta.slipDays > 0
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : meta.slipDays < 0
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-500 dark:text-slate-400',
+                      )}
+                    >
+                      {meta.slipDays > 0
+                        ? `+${meta.slipDays}d slip`
+                        : meta.slipDays < 0
+                          ? `${Math.abs(meta.slipDays)}d ahead`
+                          : 'On plan'}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {state.task.description && (
                 <p className="mt-2 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-2">
                   {state.task.description}
@@ -94,7 +148,7 @@ export const BarTooltip = forwardRef<BarTooltipHandle, { readOnly: boolean }>(
                   {style.label}
                 </span>
                 <span className="text-slate-400 dark:text-slate-500">
-                  {readOnly ? 'Click for details' : 'Click to edit'}
+                  {readOnly ? 'Click for details' : 'Drag to move · Click to edit'}
                 </span>
               </div>
             </motion.div>

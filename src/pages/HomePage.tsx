@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  ArrowUpRight,
+  CalendarBlank,
   CheckCircle,
   GlobeHemisphereWest,
   MagnifyingGlass,
@@ -8,10 +10,12 @@ import {
   SignOut,
   Sparkle,
   Stack,
+  UsersThree,
   WarningCircle,
   X,
 } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
+import { FocusDashboardPanel } from '@/components/dashboard/FocusDashboardPanel';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { UserProfilePill } from '@/components/layout/UserProfilePill';
@@ -22,13 +26,20 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { WorkspaceCard } from '@/components/workspace/WorkspaceCard';
+import { buildPortfolioFocusSummary, computeWorkspaceHealth, HEALTH_LABELS } from '@/domain/projectHealth';
+import { TASK_STATUS_LABELS } from '@/domain/taskViews';
+import { formatISODate, getTodayLocal } from '@/domain/timeline';
 import { validateWorkspaceName } from '@/domain/validation';
+import { subscribeToSharedWithMeCharts } from '@/services/shareRepository';
 import { userDocumentSync } from '@/services/userDocumentSync';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/store/toastStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import type { Task, Workspace } from '@/types';
+import type { SharedChart, Task, TaskStatus, Workspace } from '@/types';
+import { cn } from '@/utils/cn';
 import { FADE_UP_ITEM, STAGGER_CONTAINER } from '@/utils/motion';
+
+type WorkspaceHealthFilter = 'all' | 'attention' | 'on-track' | 'completed';
 
 const SUGGESTIONS = ['Product Roadmap 2026', 'Website Redesign', 'Sprint Launch Plan', 'Research Timeline'];
 
@@ -46,11 +57,15 @@ export function HomePage() {
 
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspaceStats = useWorkspaceStore((s) => s.workspaceStats);
+  const workspaceTasks = useWorkspaceStore((s) => s.workspaceTasks);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
   const updateWorkspace = useWorkspaceStore((s) => s.updateWorkspace);
+  const updateTaskStatusInWorkspace = useWorkspaceStore((s) => s.updateTaskStatusInWorkspace);
+  const restoreWorkspaceTasksSnapshot = useWorkspaceStore((s) => s.restoreWorkspaceTasksSnapshot);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [healthFilter, setHealthFilter] = useState<WorkspaceHealthFilter>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
@@ -64,6 +79,18 @@ export function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedChart[]>([]);
+
+  // Subscribe to collaborative charts shared with this user's Google email ONLY while Home is open
+  useEffect(() => {
+    if (!user?.email) {
+      return;
+    }
+    const unsubscribe = subscribeToSharedWithMeCharts(user.email, (charts) => {
+      setSharedWithMe(charts.filter((c) => c.ownerId !== user.id));
+    });
+    return () => unsubscribe();
+  }, [user?.email, user?.id]);
 
   const workspaceList = useMemo(
     () =>
@@ -75,11 +102,49 @@ export function HomePage() {
     [workspaces],
   );
 
+  const todayISO = useMemo(() => formatISODate(getTodayLocal()), []);
+
+  const portfolioFocus = useMemo(
+    () => buildPortfolioFocusSummary(workspaces, workspaceTasks, todayISO),
+    [workspaces, workspaceTasks, todayISO],
+  );
+
   const filteredWorkspaces = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return workspaceList;
-    return workspaceList.filter((w) => w.title.toLowerCase().includes(q));
-  }, [workspaceList, searchQuery]);
+    return workspaceList.filter((w) => {
+      if (q && !w.title.toLowerCase().includes(q)) return false;
+      if (healthFilter === 'all') return true;
+      const health = portfolioFocus.healthByWorkspaceId[w.id]?.health;
+      if (healthFilter === 'attention') {
+        return health === 'at-risk' || health === 'off-track';
+      }
+      if (healthFilter === 'on-track') return health === 'on-track';
+      if (healthFilter === 'completed') return health === 'completed';
+      return true;
+    });
+  }, [workspaceList, searchQuery, healthFilter, portfolioFocus.healthByWorkspaceId]);
+
+  const handleFocusStatusUpdate = async (
+    workspaceId: string,
+    taskId: number,
+    status: TaskStatus,
+  ) => {
+    try {
+      const result = await updateTaskStatusInWorkspace(workspaceId, taskId, status);
+      if (!result.updatedTask) return;
+      const taskName = result.updatedTask.name;
+      toast.success(`Moved to ${TASK_STATUS_LABELS[status]}`, taskName, 5000, {
+        label: 'Undo',
+        onClick: () => {
+          void restoreWorkspaceTasksSnapshot(workspaceId, result.previousTasks).then(() => {
+            toast.info('Status restored', taskName);
+          });
+        },
+      });
+    } catch {
+      toast.error('Could not update task status', 'Please try again.');
+    }
+  };
 
   const aggregateStats = useMemo(() => {
     let totalTasks = 0;
@@ -161,7 +226,7 @@ export function HomePage() {
           <div className="flex items-center gap-3">
             <BrandLogo size="md" />
             <span className="font-mono text-sm sm:text-[15px] font-bold uppercase tracking-[0.22em] text-slate-900 dark:text-slate-100">
-              GANTT
+              SKED
             </span>
           </div>
 
@@ -234,6 +299,20 @@ export function HomePage() {
                     </span>{' '}
                     shared
                   </span>
+                  {portfolioFocus.counts.atRiskWorkspaces + portfolioFocus.counts.offTrackWorkspaces >
+                    0 && (
+                    <>
+                      <span className="h-3 w-px bg-slate-200 dark:bg-white/10" />
+                      <span className="inline-flex items-center gap-1.5 font-medium text-rose-700 dark:text-rose-300">
+                        <WarningCircle className="w-3.5 h-3.5 text-rose-500" weight="duotone" />
+                        <span className="font-mono font-semibold tabular-nums">
+                          {portfolioFocus.counts.atRiskWorkspaces +
+                            portfolioFocus.counts.offTrackWorkspaces}
+                        </span>{' '}
+                        need attention
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -265,12 +344,58 @@ export function HomePage() {
         {/* Workspaces Grid or First-Time Onboarding */}
         {workspaceList.length > 0 ? (
           <>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-200/80 dark:border-white/[0.07]">
-              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-                Your Workspaces
-              </h2>
+            {aggregateStats.totalTasks > 0 && (
+              <FocusDashboardPanel
+                summary={portfolioFocus}
+                onOpenTask={(wsId, taskId) => navigate(`/workspace/${wsId}?task=${taskId}`)}
+                onUpdateTaskStatus={(wsId, taskId, status) =>
+                  void handleFocusStatusUpdate(wsId, taskId, status)
+                }
+              />
+            )}
 
-              <div className="relative w-full sm:w-72">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-200/80 dark:border-white/[0.07]">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  Your Workspaces
+                </h2>
+
+                {workspaceList.length > 1 && (
+                  <div
+                    role="group"
+                    aria-label="Filter workspaces by health"
+                    className="inline-flex items-center p-0.5 rounded-lg bg-slate-200/60 dark:bg-white/[0.05] border border-slate-200/80 dark:border-white/[0.08]"
+                  >
+                    {(
+                      [
+                        { id: 'all', label: 'All' },
+                        { id: 'attention', label: 'Needs Attention' },
+                        { id: 'on-track', label: 'On Track' },
+                        { id: 'completed', label: 'Completed' },
+                      ] as const
+                    ).map((opt) => {
+                      const active = healthFilter === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setHealthFilter(opt.id)}
+                          className={cn(
+                            'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer',
+                            active
+                              ? 'bg-white dark:bg-surface-elevated text-slate-900 dark:text-white shadow-surface-sm'
+                              : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100',
+                          )}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="relative w-full lg:w-72">
                 <MagnifyingGlass
                   className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
                   weight="duotone"
@@ -299,15 +424,20 @@ export function HomePage() {
             {filteredWorkspaces.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 dark:border-white/15 bg-white/70 dark:bg-surface-dark/70 p-10 text-center">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  No workspaces match &ldquo;{searchQuery}&rdquo;
+                  {searchQuery
+                    ? `No workspaces match "${searchQuery}"`
+                    : 'No workspaces match this health filter'}
                 </p>
                 <Button
                   variant="subtle"
                   size="sm"
                   className="mt-3"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setHealthFilter('all');
+                  }}
                 >
-                  Clear filter
+                  Reset filters
                 </Button>
               </div>
             ) : (
@@ -322,6 +452,7 @@ export function HomePage() {
                     <WorkspaceCard
                       workspace={ws}
                       stats={workspaceStats[ws.id]}
+                      health={portfolioFocus.healthByWorkspaceId[ws.id]}
                       accentIndex={idx}
                       isEditing={editingId === ws.id}
                       editingName={editingName}
@@ -433,6 +564,122 @@ export function HomePage() {
               </div>
             </div>
           </motion.div>
+        )}
+
+        {/* Shared With Me (Invited Collaborative Workspaces) */}
+        {sharedWithMe.length > 0 && (
+          <section aria-label="Shared with me" className="mt-12">
+            <div className="flex items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-200/80 dark:border-white/[0.07]">
+              <div className="flex items-center gap-2">
+                <UsersThree
+                  weight="duotone"
+                  className="w-4 h-4 text-brand-600 dark:text-brand-400"
+                />
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                  Shared With Me
+                </h2>
+                <span className="font-mono text-[11px] font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300 tabular-nums">
+                  {sharedWithMe.length}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {sharedWithMe.map((chart) => {
+                const { summary: health } = computeWorkspaceHealth(
+                  {
+                    id: chart.workspaceId || chart.shareId,
+                    title: chart.title,
+                    createdAt: chart.createdAt,
+                    updatedAt: chart.updatedAt,
+                    baseline: chart.baseline,
+                  },
+                  chart.tasks,
+                  todayISO,
+                );
+
+                const healthBadgeClass =
+                  health.health === 'off-track'
+                    ? 'bg-rose-50 text-rose-700 border-rose-200/90 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/35'
+                    : health.health === 'at-risk'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200/90 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/35'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200/90 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/35';
+
+                return (
+                  <button
+                    key={chart.shareId}
+                    type="button"
+                    data-testid={`shared-with-me-${chart.shareId}`}
+                    onClick={() => navigate(`/share/${chart.shareId}`)}
+                    className="group flex flex-col justify-between rounded-2xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-surface-dark p-4 text-left hover:border-brand-400/80 hover:shadow-surface-md dark:hover:border-brand-400/50 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-400/30 text-[10px] font-semibold">
+                            <UsersThree weight="duotone" className="w-3 h-3" />
+                            Editor
+                          </span>
+                          {health.health !== 'empty' && (
+                            <span
+                              className={cn(
+                                'inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold',
+                                healthBadgeClass,
+                              )}
+                            >
+                              {HEALTH_LABELS[health.health]}
+                            </span>
+                          )}
+                        </div>
+                        <ArrowUpRight
+                          weight="bold"
+                          className="w-4 h-4 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                        />
+                      </div>
+
+                      <h3 className="text-base font-bold text-slate-900 dark:text-slate-50 truncate">
+                        {chart.title}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                        Shared by {chart.ownerName}
+                      </p>
+                      <p className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                        <CalendarBlank className="w-3.5 h-3.5 shrink-0" weight="duotone" />
+                        Updated{' '}
+                        {new Date(chart.updatedAt || chart.createdAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-mono font-medium text-slate-600 dark:text-slate-300 tabular-nums">
+                          {health.totalTasks} {health.totalTasks === 1 ? 'task' : 'tasks'}
+                        </span>
+                        <span className="font-mono font-bold text-brand-600 dark:text-brand-400 tabular-nums">
+                          {health.completionPercent}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-200/75 dark:bg-white/[0.07] overflow-hidden">
+                        <div
+                          style={{ width: `${health.completionPercent}%` }}
+                          className={cn(
+                            'h-full rounded-full',
+                            health.completionPercent === 100
+                              ? 'bg-emerald-500'
+                              : 'bg-brand-600 dark:bg-brand-500',
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         )}
       </main>
 

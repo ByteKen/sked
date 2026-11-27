@@ -11,10 +11,10 @@ export function downloadBlob(blob: Blob, filename: string): void {
 
 export function buildExportBaseFilename(workspaceTitle?: string | null): string {
   const dateStamp = new Date().toISOString().slice(0, 10);
-  const safe = (workspaceTitle || 'gantt-chart')
+  const safe = (workspaceTitle || 'sked-timeline')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
-  return `${safe || 'gantt-chart'}-${dateStamp}`;
+  return `${safe || 'sked-timeline'}-${dateStamp}`;
 }

@@ -92,6 +92,16 @@ export function getTodayLocal(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
 
+/**
+ * Format a local Date into YYYY-MM-DD without UTC timezone shifts.
+ */
+export function formatISODate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export function formatShortDate(dateOrStr: Date | string): string {
   const date = typeof dateOrStr === 'string' ? parseISODate(dateStrSafe(dateOrStr)) : dateOrStr;
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });

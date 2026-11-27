@@ -24,30 +24,30 @@ interface LegalSection {
   bullets?: LegalListItem[];
 }
 
-const GITHUB_REPO_URL = 'https://github.com/ByteKen/ganttapp';
-const GITHUB_ISSUES_URL = 'https://github.com/ByteKen/ganttapp/issues';
+const GITHUB_REPO_URL = 'https://github.com/ByteKen/sked';
+const GITHUB_ISSUES_URL = 'https://github.com/ByteKen/sked/issues';
 
 const TERMS_SECTIONS: LegalSection[] = [
   {
     id: 'acceptance',
     title: '1. Acceptance of Terms',
     paragraphs: [
-      'By opening or using Gantt, you agree to these Terms of Use. If you do not agree, stop using the app.',
-      'Gantt works with any valid Google account without domain restrictions. You must be at least 13 years old (or the minimum age required to hold a Google account in your country) to use the service.',
+      'By opening or using Sked, you agree to these Terms of Use. If you do not agree, stop using the app.',
+      'Sked works with any valid Google account without domain restrictions. You must be at least 13 years old (or the minimum age required to hold a Google account in your country) to use the service.',
     ],
   },
   {
     id: 'service',
-    title: '2. What Gantt Provides',
+    title: '2. What Sked Provides',
     paragraphs: [
-      'Gantt is a free browser app for planning project timelines, nested subtasks, and milestone dependencies. It includes cloud sync across workspaces, multi-page PDF, PNG, CSV, and JSON exports, optional public read-only share links, and optional Telegram deadline reminders.',
+      'Sked is a free browser app for planning project timelines, nested subtasks, and milestone dependencies. It includes cloud sync across workspaces, multi-page PDF, PNG, CSV, and JSON exports, optional public read-only share links, and an optional Telegram bot with deadline alerts.',
     ],
   },
   {
     id: 'ownership',
     title: '3. Your Workspaces & Content',
     paragraphs: [
-      'You keep full ownership of every workspace, task, note, and exported file you create in Gantt.',
+      'You keep full ownership of every workspace, task, note, and exported file you create in Sked.',
       'You grant us only the limited technical permission needed to store, sync, render, and (when you turn sharing on) display your schedules to people who have the link.',
     ],
   },
@@ -79,23 +79,23 @@ const TERMS_SECTIONS: LegalSection[] = [
     id: 'intellectual-property',
     title: '7. Intellectual Property',
     paragraphs: [
-      'Your project schedules belong to you. The Gantt source code, interface design, name, and mascot artwork remain the property of the project maintainer, subject to the repository license.',
+      'Your project schedules belong to you. The Sked source code, interface design, name, and mascot artwork remain the property of the project maintainer, subject to the repository license.',
     ],
   },
   {
     id: 'liability',
     title: '8. Disclaimer & Limitation of Liability',
     paragraphs: [
-      'Gantt is a free tool provided "as is" and "as available," without warranties of any kind. We do not guarantee uninterrupted uptime, error-free syncing, or on-time Telegram notifications.',
-      'To the maximum extent allowed by law, the maintainer is not liable for missed project deadlines, lost schedules, service outages, or indirect or consequential damages resulting from your use of Gantt. Export JSON backups regularly if you need offline archives.',
+      'Sked is a free tool provided "as is" and "as available," without warranties of any kind. We do not guarantee uninterrupted uptime, error-free syncing, or on-time Telegram notifications.',
+      'To the maximum extent allowed by law, the maintainer is not liable for missed project deadlines, lost schedules, service outages, or indirect or consequential damages resulting from your use of Sked. Export JSON backups regularly if you need offline archives.',
     ],
   },
   {
     id: 'changes-contact',
     title: '9. Changes & Contact',
     paragraphs: [
-      'We may update these terms as the app evolves, and the date at the top reflects the latest revision. Continuing to use Gantt after an update means you accept the updated terms.',
-      'To report an abusive public link or ask a question about these terms, open an issue on the Gantt GitHub repository linked below.',
+      'We may update these terms as the app evolves, and the date at the top reflects the latest revision. Continuing to use Sked after an update means you accept the updated terms.',
+      'To report an abusive public link or ask a question about these terms, open an issue on the Sked GitHub repository linked below.',
     ],
   },
 ];
@@ -124,7 +124,7 @@ const PRIVACY_SECTIONS: LegalSection[] = [
       {
         label: 'Optional Telegram link',
         detail:
-          'Only when you connect Telegram Alerts, we store your Telegram chat ID, username or first name, timezone, reminder schedule, and recent reminder timestamps so the bot does not send duplicate pings.',
+          'Only when you connect Telegram Bot & Alerts, we store your Telegram chat ID, username or first name, timezone, reminder schedule, and recent reminder timestamps so the bot does not send duplicate pings.',
       },
     ],
   },
@@ -132,14 +132,14 @@ const PRIVACY_SECTIONS: LegalSection[] = [
     id: 'how-used',
     title: '2. How We Use Your Data',
     paragraphs: [
-      'We use your data only to authenticate your account, sync workspaces across your devices, serve public links you turn on, and deliver Telegram reminders you opt into.',
+      'We use your data only to authenticate your account, sync workspaces across your devices, serve public links you turn on, and power the Telegram bot and reminders you opt into.',
       'We do not run ads, embed third-party analytics trackers, or sell your personal information or project data.',
     ],
   },
   {
     id: 'third-party-services',
     title: '3. Third-Party Services',
-    paragraphs: ['Gantt relies on a small set of external services to operate:'],
+    paragraphs: ['Sked relies on a small set of external services to operate:'],
     bullets: [
       {
         label: 'Google Firebase (Auth & Cloud Firestore)',
@@ -153,7 +153,7 @@ const PRIVACY_SECTIONS: LegalSection[] = [
       {
         label: 'Telegram Bot API',
         detail:
-          'Used only if you connect alerts. Upcoming or overdue workspace names, task titles, and due dates are sent through Telegram to reach your chat.',
+          'Used only if you connect Telegram. Workspace names, task titles, progress, and due dates are exchanged through Telegram when you use bot commands or receive deadline reminders.',
       },
       {
         label: 'Google Fonts',
@@ -181,7 +181,7 @@ const PRIVACY_SECTIONS: LegalSection[] = [
     id: 'browser-storage',
     title: '6. Browser Storage & Cookies',
     paragraphs: [
-      'Gantt saves your light/dark theme and sidebar width in browser local storage so the interface loads cleanly without flashing. Firebase Authentication also uses browser storage to keep your login session active.',
+      'Sked saves your light/dark theme and sidebar width in browser local storage so the interface loads cleanly without flashing. Firebase Authentication also uses browser storage to keep your login session active.',
       'We do not place advertising cookies or cross-site tracking pixels.',
     ],
   },
@@ -197,8 +197,8 @@ const PRIVACY_SECTIONS: LegalSection[] = [
     id: 'children-contact',
     title: '8. Children’s Privacy, Updates & Contact',
     paragraphs: [
-      'Gantt is not directed at children under 13 (or the minimum age required for a Google account in your country).',
-      'When we update this policy, we update the date at the top of this page. For privacy questions or data requests, reach out through the Gantt GitHub repository linked below.',
+      'Sked is not directed at children under 13 (or the minimum age required for a Google account in your country).',
+      'When we update this policy, we update the date at the top of this page. For privacy questions or data requests, reach out through the Sked GitHub repository linked below.',
     ],
   },
 ];
@@ -219,7 +219,7 @@ export function LegalPage({ section }: LegalPageProps) {
           <Link to="/" className="flex items-center gap-3 group">
             <BrandLogo size="md" className="group-hover:scale-[1.04] transition-transform" />
             <span className="font-mono text-sm sm:text-[15px] font-bold uppercase tracking-[0.2em] text-slate-900 dark:text-slate-100">
-              GANTT
+              SKED
             </span>
           </Link>
 

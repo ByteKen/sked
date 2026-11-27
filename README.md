@@ -1,17 +1,17 @@
 <div align="center">
-  <img src="./assets/gantt-logo.png" alt="Gantt logo" width="96" />
-  <h1>Gantt App</h1>
+  <img src="./assets/sked-logo.png" alt="Sked logo" width="96" />
+  <h1>Sked</h1>
 </div>
 
 
 <p align="center">
-  <img src="./assets/social-preview.png" alt="Gantt - Plan. Organize. Track Progress." width="100%" />
+  <img src="./assets/social-preview.png" alt="Sked - Plan. Organize. Track Progress." width="100%" />
 </p>
 
 <p align="center">
-  <a href="https://ganttapp.vercel.app">Live App</a> ·
-  <a href="https://ganttapp.vercel.app/terms">Terms of Use</a> ·
-  <a href="https://ganttapp.vercel.app/privacy">Privacy Policy</a> ·
+  <a href="https://skedspace.vercel.app">Live App</a> ·
+  <a href="https://skedspace.vercel.app/terms">Terms of Use</a> ·
+  <a href="https://skedspace.vercel.app/privacy">Privacy Policy</a> ·
   <a href="./LICENSE">License</a>
 </p>
 
@@ -23,22 +23,21 @@
 
 ## About
 
-Gantt is a browser-based project timeline app for planning schedules, tracking subtasks and dependencies, exporting multi-page charts, and sharing live read-only links.
+Sked is an open-source project workspace for planning Gantt timelines, managing Kanban boards and sortable task lists, tracking project health across workspaces, collaborating live with invited editors, and exporting multi-page charts.
 
 > [!NOTE]
-> Open to any Google account with real-time Firebase cloud sync, optional Telegram deadline alerts, and zero ad trackers.
+> Open to any Google account with real-time Firebase cloud sync, optional Telegram bot & deadline alerts, and zero ad trackers.
 
 ## Features
 
-- **Nested Tasks & Subtasks:** Organize multi-level phases, tasks, and single-day milestones with automatic parent progress rollups.
-- **Smart Dependency Arrows:** Connect blocking tasks with obstacle-aware routing that stays clear of bars and labels.
-- **Flexible Timeline Views:** Switch between Days, Weeks, Months, Quarters, and Years, with `Ctrl + Scroll` zoom, `Shift + Scroll` panning, and mobile pinch-to-zoom.
-- **Multi-Workspace Cloud Sync:** Manage multiple projects synced in real time through Firebase Cloud Firestore.
-- **Live Shareable Links:** Publish read-only `/share/:shareId` links with live updates, custom "Shared by" profile names, and one-click duplication.
-- **Telegram Bot & Deadline Alerts:** Connect Telegram in one tap for timezone-aware reminders, interactive task browsing (`/tasks`, `/today`, `/upcoming`, `/summary`), and one-tap Mark Done or progress updates synced live to your chart.
+- **Timeline, Board & List Views:** Switch seamlessly between an interactive Gantt timeline, a 4-column Kanban board, and a sortable task table with inline editing (`1` / `2` / `3` shortcuts, full mobile support).
+- **Drag-to-Reschedule, Critical Path & Baselines:** Drag or resize bars directly on the timeline (touch-and-hold on mobile) with automatic dependency cascading, one-click Undo, Critical Path highlighting, and Planned vs. Actual baseline ghost bars.
+- **My Focus & Project Health:** Track overdue, due-today, active, and upcoming tasks across all workspaces from one Home dashboard with live `On Track` / `At Risk` / `Off Track` workspace health indicators.
+- **Live Sharing & Multi-Editor Collaboration:** Publish live read-only `/share/:shareId` links or invite specific Google accounts as live editors with conflict-safe transactional sync and a dedicated **Shared With Me** section.
+- **Nested Tasks & Smart Dependencies:** Organize multi-level phases, tasks, and single-day milestones with automatic parent progress rollups and obstacle-aware dependency arrows.
+- **Telegram Bot & Deadline Alerts:** Connect Telegram in one tap for timezone-aware reminders, interactive task browsing (`/tasks`, `/today`, `/upcoming`, `/summary`), and one-tap Mark Done or progress updates synced live.
 - **Multi-Page Exports & JSON Import:** Export balanced multi-page PDFs, crisp 2x PNG images, CSV, or JSON, and import `.json` backups with validation.
-- **Light & Dark Themes:** Daylight and dark interfaces with tabbed settings for Profile, Display, Export, Bot & Alerts, and Shortcuts.
-- **Full Account Control:** Export your data or permanently delete your account, workspaces, public links, and Telegram link anytime from `Settings -> Profile`.
+- **Light & Dark Themes + Full Account Control:** Daylight and dark interfaces with tabbed settings, data export, and permanent account deletion anytime from `Settings -> Profile`.
 
 ## Get started
 
@@ -50,8 +49,8 @@ Gantt is a browser-based project timeline app for planning schedules, tracking s
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/ByteKen/ganttapp.git
-cd ganttapp
+git clone https://github.com/ByteKen/sked.git
+cd sked
 npm install
 ```
 

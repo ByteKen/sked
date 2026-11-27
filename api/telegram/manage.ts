@@ -148,7 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .map((d) => (d === 0 ? 'Due today' : `${d}d before`))
           .join(', ');
         const baseUrl = getAppBaseUrl(req);
-        const linkLine = baseUrl ? `\n<a href="${baseUrl}">Open Gantt</a>` : '';
+        const linkLine = baseUrl ? `\n<a href="${baseUrl}">Open Sked</a>` : '';
 
         // Refresh Telegram slash-command menu for already-connected users
         void setTelegramBotCommands(BOT_COMMANDS);
@@ -156,7 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const result = await sendTelegramMessage(
           sub.chatId,
           [
-            '<b>✅ Gantt Test Notification</b>',
+            '<b>✅ Sked Test Notification</b>',
             '',
             `Hi ${escapeTelegramHtml(sub.firstName || verifiedUser.name)}! Your Telegram bot and deadline alerts are active.`,
             `• Schedule: <b>${escapeTelegramHtml(offsetsLabel)}</b>${sub.includeOverdue ? ' + Overdue' : ''}`,

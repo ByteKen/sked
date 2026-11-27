@@ -434,7 +434,7 @@ export function buildWorkspacesView(
   appBaseUrl?: string,
 ): BotViewPayload {
   if (workspaces.length === 0) {
-    const link = appBaseUrl ? `\n\n<a href="${appBaseUrl}">Open Gantt</a> to create your first workspace.` : '';
+    const link = appBaseUrl ? `\n\n<a href="${appBaseUrl}">Open Sked</a> to create your first workspace.` : '';
     return {
       text: `<b>📁 Your Workspaces</b>\n\nYou don't have any workspaces yet.${link}`,
     };
@@ -677,7 +677,7 @@ export function buildTaskDetailView(
   const cleanBase = appBaseUrl?.replace(/\/+$/, '');
   if (cleanBase) {
     navRow.push({
-      text: '🌐 Open in Gantt',
+      text: '🌐 Open in Sked',
       url: `${cleanBase}/workspace/${workspace.workspaceId}`,
     });
   }
@@ -818,7 +818,7 @@ export function buildSummaryView(
   const overallPercent = totalTasks > 0 ? Math.round((totalDone / totalTasks) * 100) : 0;
 
   const lines: string[] = [
-    '<b>📊 Gantt Progress Summary</b>',
+    '<b>📊 Sked Progress Summary</b>',
     `<code>${renderProgressBar(overallPercent)}</code> <b>${overallPercent}%</b> (${totalDone}/${totalTasks} tasks done)`,
     '',
     `🔴 Overdue: <b>${totalOverdue}</b>   🔥 Due today: <b>${totalDueToday}</b>   📅 Next 7d: <b>${totalDueSoon}</b>`,
@@ -837,7 +837,7 @@ export function buildSummaryView(
 
   const cleanBase = appBaseUrl?.replace(/\/+$/, '');
   if (cleanBase) {
-    rows.push([{ text: '🌐 Open Gantt Studio', url: cleanBase }]);
+    rows.push([{ text: '🌐 Open Sked', url: cleanBase }]);
   }
 
   return {
@@ -866,7 +866,7 @@ export function buildReminderAlertReplyMarkup(
   ];
   const cleanBase = appBaseUrl?.replace(/\/+$/, '');
   if (cleanBase) {
-    footer.push({ text: '🌐 Open Gantt', url: cleanBase });
+    footer.push({ text: '🌐 Open Sked', url: cleanBase });
   }
   rows.push(footer);
 
@@ -876,7 +876,7 @@ export function buildReminderAlertReplyMarkup(
 export function buildHelpMessage(): BotViewPayload {
   return {
     text: [
-      '<b>🤖 Gantt Bot Commands</b>',
+      '<b>🤖 Sked Bot Commands</b>',
       '',
       '<b>Tasks &amp; Progress</b>',
       '• /tasks — browse tasks, inspect details, and mark items done',

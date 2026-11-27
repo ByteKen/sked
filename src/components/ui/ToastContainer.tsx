@@ -75,6 +75,18 @@ function ToastRow({ item, onDismiss }: { item: ToastItem; onDismiss: (id: number
               {item.description}
             </p>
           )}
+          {item.action && (
+            <button
+              type="button"
+              onClick={() => {
+                item.action?.onClick();
+                onDismiss(item.id);
+              }}
+              className="mt-2 inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/[0.08] dark:hover:bg-white/[0.14] dark:text-slate-100 transition-colors cursor-pointer"
+            >
+              {item.action.label}
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -104,7 +116,7 @@ export function ToastContainer() {
   return (
     <div
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-[70] flex flex-col gap-2.5 w-[calc(100vw-2rem)] max-w-sm pointer-events-none"
+      className="fixed bottom-[72px] md:bottom-4 right-4 z-[70] flex flex-col gap-2.5 w-[calc(100vw-2rem)] max-w-sm pointer-events-none"
     >
       <AnimatePresence mode="popLayout">
         {toasts.map((item) => (
