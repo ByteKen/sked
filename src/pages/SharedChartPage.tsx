@@ -539,6 +539,7 @@ export function SharedChartPage() {
         barHeight: chart.preferences.barHeight,
         taskLabelPosition: chart.preferences.taskLabelPosition,
         granularity: ganttRef.current?.getGranularity(),
+        baseline: chart.baseline,
       });
       if (result.ok) {
         toast.success(`Exported ${format.toUpperCase()}`, result.filename);

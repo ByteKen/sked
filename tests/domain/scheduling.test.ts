@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDaysISO,
+  computeClampedDragDates,
   computeCriticalPath,
   computeTaskBaselineSlipDays,
+  computeTaskDateBoundsMap,
   createWorkspaceBaseline,
   rescheduleTaskInTree,
 } from '@/domain/scheduling';
@@ -116,17 +118,127 @@ describe('scheduling domain engine (reschedule, cascade, CPM, baselines)', () =>
     expect(result.tasks[3]!.end).toBe('2026-11-04');
   });
 
-  it('expands parent envelope when a subtask is extended and leaves dependents untouched when autoCascade is false', () => {
-    const result = rescheduleTaskInTree(chainTasks, {
+  it('clamps subtask resizes and moves strictly inside its parent range without altering parent dates', () => {
+    // Review Spec (id: 3) is Nov 4 – Nov 5 inside Phase A (Nov 1 – Nov 5).
+    // Attempting to extend past Nov 5 clamps to Nov 5 (no-op) and leaves Phase A unchanged.
+    const pastEnd = rescheduleTaskInTree(chainTasks, {
       taskId: 3,
       nextStart: '2026-11-04',
       nextEnd: '2026-11-09',
+      autoCascade: true,
+    });
+    expect(pastEnd.movedTask).toBeNull();
+    expect(pastEnd.tasks[0]!.start).toBe('2026-11-01');
+    expect(pastEnd.tasks[0]!.end).toBe('2026-11-05');
+    expect(pastEnd.tasks[0]!.children![1]!.end).toBe('2026-11-05');
+    expect(pastEnd.cascadedTaskIds).toHaveLength(0);
+
+    // Extending Draft Spec (id: 2, Nov 1 – Nov 3) past Phase A's Nov 5 clamps strictly to Nov 5
+    // while leaving Phase A's [Nov 1, Nov 5] untouched.
+    const clampedExtend = rescheduleTaskInTree(chainTasks, {
+      taskId: 2,
+      nextStart: '2026-11-01',
+      nextEnd: '2026-11-10',
       autoCascade: false,
     });
+    expect(clampedExtend.movedTask?.start).toBe('2026-11-01');
+    expect(clampedExtend.movedTask?.end).toBe('2026-11-05');
+    expect(clampedExtend.tasks[0]!.start).toBe('2026-11-01');
+    expect(clampedExtend.tasks[0]!.end).toBe('2026-11-05');
 
-    expect(result.tasks[0]!.end).toBe('2026-11-09');
-    expect(result.cascadedTaskIds).toHaveLength(0);
-    expect(result.tasks[1]!.start).toBe('2026-11-06');
+    // Moving Review Spec (2 days: Nov 4 – Nov 5) earlier than Phase A's start clamps to Nov 1 – Nov 2
+    const clampedEarlier = rescheduleTaskInTree(chainTasks, {
+      taskId: 3,
+      nextStart: '2026-10-28',
+      nextEnd: '2026-10-29',
+      autoCascade: false,
+    });
+    expect(clampedEarlier.movedTask?.start).toBe('2026-11-01');
+    expect(clampedEarlier.movedTask?.end).toBe('2026-11-02');
+    expect(clampedEarlier.tasks[0]!.start).toBe('2026-11-01');
+    expect(clampedEarlier.tasks[0]!.end).toBe('2026-11-05');
+
+    // Shrinking a subtask to a single day succeeds without shrinking its parent
+    const singleDay = rescheduleTaskInTree(chainTasks, {
+      taskId: 3,
+      nextStart: '2026-11-04',
+      nextEnd: '2026-11-04',
+      autoCascade: false,
+    });
+    expect(singleDay.movedTask?.start).toBe('2026-11-04');
+    expect(singleDay.movedTask?.end).toBe('2026-11-04');
+    expect(singleDay.movedTask?.isDeadline).toBe(true);
+    expect(singleDay.tasks[0]!.end).toBe('2026-11-05');
+  });
+
+  it('prevents edge-resizing a parent narrower than its subtasks while allowing full extension', () => {
+    const bounds = computeTaskDateBoundsMap(chainTasks);
+    // Phase A (Nov 1 – Nov 5) contains Nov 1 – Nov 5 children
+    expect(bounds.get(1)).toEqual({
+      maxResizeStart: '2026-11-01',
+      minResizeEnd: '2026-11-05',
+    });
+
+    // Shrinking Phase A's end date to Nov 3 clamps to latest child end (Nov 5)
+    const shrinkBlocked = computeClampedDragDates({
+      mode: 'resize-end',
+      origStart: '2026-11-01',
+      origEnd: '2026-11-05',
+      deltaDays: -2,
+      bounds: bounds.get(1),
+    });
+    expect(shrinkBlocked).toEqual({
+      nextStart: '2026-11-01',
+      nextEnd: '2026-11-05',
+      clampedBy: 'child',
+    });
+
+    // Extending Phase A's end date to Nov 8 works freely
+    const extended = rescheduleTaskInTree(chainTasks, {
+      taskId: 1,
+      nextStart: '2026-11-01',
+      nextEnd: '2026-11-08',
+      autoCascade: false,
+    });
+    expect(extended.movedTask?.end).toBe('2026-11-08');
+  });
+
+  it('keeps auto-cascaded dependent subtasks inside their parent bounds without expanding the parent', () => {
+    const nestedDeps: Task[] = [
+      {
+        id: 1,
+        name: 'Phase 1',
+        start: '2026-11-01',
+        end: '2026-11-06',
+        progress: 0,
+        children: [
+          { id: 2, name: 'Sub A', start: '2026-11-01', end: '2026-11-02', progress: 0, parentId: 1 },
+          {
+            id: 3,
+            name: 'Sub B',
+            start: '2026-11-03',
+            end: '2026-11-04',
+            progress: 0,
+            parentId: 1,
+            dependencies: [2],
+          },
+        ],
+      },
+    ];
+
+    // Extend Sub A from Nov 2 to Nov 5 (within Phase 1 end Nov 6).
+    // Sub B wants to shift +3d to Nov 6 – Nov 7, but clamps at +2d (Nov 5 – Nov 6) to stay inside Phase 1.
+    const result = rescheduleTaskInTree(nestedDeps, {
+      taskId: 2,
+      nextStart: '2026-11-01',
+      nextEnd: '2026-11-05',
+      autoCascade: true,
+    });
+
+    expect(result.tasks[0]!.end).toBe('2026-11-06');
+    expect(result.tasks[0]!.children![1]!.start).toBe('2026-11-05');
+    expect(result.tasks[0]!.children![1]!.end).toBe('2026-11-06');
+    expect(result.cascadedTaskIds).toContain(3);
   });
 
   it('computes Critical Path tasks, critical edges, and positive slack for non-critical branches', () => {

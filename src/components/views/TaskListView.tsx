@@ -18,6 +18,7 @@ import {
 } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
 import type { StatusFilter } from '@/components/gantt/GanttToolbar';
+import { clampDateISO, computeTaskDateBoundsMap } from '@/domain/scheduling';
 import { computeTaskStats, flattenTasks, isTaskCompleted } from '@/domain/taskTree';
 import {
   BOARD_COLUMN_ORDER,
@@ -96,6 +97,7 @@ export const TaskListView = memo(function TaskListView({
   const todayISO = useMemo(() => formatISODate(getTodayLocal()), []);
   const stats = useMemo(() => computeTaskStats(tasks), [tasks]);
   const allFlatTasks = useMemo(() => flattenTasks(tasks), [tasks]);
+  const taskDateBounds = useMemo(() => computeTaskDateBoundsMap(tasks), [tasks]);
 
   const parentIds = useMemo(
     () => allFlatTasks.filter((t) => t.hasChildren).map((t) => t.id),
@@ -211,6 +213,18 @@ export const TaskListView = memo(function TaskListView({
     const isEditing = !readOnly && Boolean(onRescheduleTask) && editingDateTaskId === task.id;
 
     if (isEditing && onRescheduleTask) {
+      const bounds = taskDateBounds.get(task.id);
+      const startMin = bounds?.minStart;
+      const startMax =
+        bounds?.maxResizeStart && (!bounds.maxEnd || bounds.maxResizeStart < bounds.maxEnd)
+          ? bounds.maxResizeStart
+          : bounds?.maxEnd;
+      const endMin =
+        bounds?.minResizeEnd && bounds.minResizeEnd > task.start
+          ? bounds.minResizeEnd
+          : task.start;
+      const endMax = bounds?.maxEnd;
+
       return (
         <div
           className="flex items-center gap-1.5 flex-wrap"
@@ -219,10 +233,13 @@ export const TaskListView = memo(function TaskListView({
           <input
             type="date"
             aria-label={`Start date for ${task.name}`}
-            defaultValue={task.start}
+            value={task.start}
+            min={startMin}
+            max={startMax}
             onChange={(e) => {
-              const nextStart = e.target.value;
-              if (!nextStart) return;
+              const rawStart = e.target.value;
+              if (!rawStart) return;
+              const nextStart = clampDateISO(rawStart, startMin, startMax);
               const nextEnd = nextStart > task.end ? nextStart : task.end;
               onRescheduleTask(task.id, nextStart, nextEnd, true);
             }}
@@ -232,11 +249,14 @@ export const TaskListView = memo(function TaskListView({
           <input
             type="date"
             aria-label={`End date for ${task.name}`}
-            defaultValue={task.end}
-            min={task.start}
+            value={task.end}
+            min={endMin}
+            max={endMax}
             onChange={(e) => {
-              const nextEnd = e.target.value;
-              if (!nextEnd || nextEnd < task.start) return;
+              const rawEnd = e.target.value;
+              if (!rawEnd) return;
+              const nextEnd = clampDateISO(rawEnd, endMin, endMax);
+              if (nextEnd < task.start) return;
               onRescheduleTask(task.id, task.start, nextEnd, true);
             }}
             className="h-7 py-0 px-2 rounded-md border border-brand-300 dark:border-brand-400/40 bg-white dark:bg-surface-elevated font-mono text-[11px] leading-none text-slate-800 dark:text-slate-100"

@@ -440,18 +440,20 @@ export const useGanttStore = create<GanttStoreState>()(
           nextEnd,
           autoCascade,
         });
-        set({ tasks: result.tasks });
-        schedulePersist({
-          collaborativeMutate: (current) => {
-            const next = rescheduleTaskInTree(current.tasks, {
-              taskId,
-              nextStart,
-              nextEnd,
-              autoCascade,
-            });
-            return { tasks: next.tasks, nextId: current.nextId };
-          },
-        });
+        if (result.movedTask) {
+          set({ tasks: result.tasks });
+          schedulePersist({
+            collaborativeMutate: (current) => {
+              const next = rescheduleTaskInTree(current.tasks, {
+                taskId,
+                nextStart,
+                nextEnd,
+                autoCascade,
+              });
+              return next.movedTask ? { tasks: next.tasks, nextId: current.nextId } : null;
+            },
+          });
+        }
         return { ...result, previousTasks };
       },
 

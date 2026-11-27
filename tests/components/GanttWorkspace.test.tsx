@@ -281,12 +281,54 @@ describe('GanttWorkspace unified split-pane alignment', () => {
     expect(screen.getByTestId('baseline-ghost-3')).toBeInTheDocument();
     expect(screen.getAllByText('+2d').length).toBeGreaterThanOrEqual(1);
 
-    // 3. Drag CI Pipeline bar +80px right (Days view at 100% zoom = 40px/day -> +2 days)
-    fireEvent.pointerDown(ciBar, { clientX: 100, button: 0 });
-    fireEvent.pointerMove(window, { clientX: 180 });
-    fireEvent.pointerUp(window, { clientX: 180 });
+    // 3. Drag CI Pipeline bar -80px left within Phase 1 bounds (Days view at 100% zoom = 40px/day -> -2 days)
+    fireEvent.pointerDown(ciBar, { clientX: 180, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 100 });
+    fireEvent.pointerUp(window, { clientX: 100 });
 
-    expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-13', '2026-01-22', true);
+    expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-09', '2026-01-18', true);
+  });
+
+  it('clamps subtask drag and resize handles strictly inside the parent start and end dates', () => {
+    const onRescheduleTask = vi.fn();
+
+    render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        onRescheduleTask={onRescheduleTask}
+      />,
+    );
+
+    // 1. Extending Setup Repository (Jan 5 – Jan 10) right by +600px (+15d) clamps strictly at Phase 1 end (Jan 20)
+    const setupEndHandle = screen.getByLabelText(/resize end date of setup repository/i);
+    fireEvent.pointerDown(setupEndHandle, { clientX: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 700 });
+    expect(screen.getByText(/parent limit/i)).toBeInTheDocument();
+    fireEvent.pointerUp(window, { clientX: 700 });
+
+    expect(onRescheduleTask).toHaveBeenCalledWith(2, '2026-01-05', '2026-01-20', true);
+    onRescheduleTask.mockClear();
+
+    // 2. Trying to extend CI Pipeline (Jan 11 – Jan 20) past Phase 1 end (Jan 20) stays clamped (no reschedule)
+    const ciEndHandle = screen.getByLabelText(/resize end date of ci pipeline/i);
+    fireEvent.pointerDown(ciEndHandle, { clientX: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 300 });
+    expect(screen.getByText(/parent limit/i)).toBeInTheDocument();
+    fireEvent.pointerUp(window, { clientX: 300 });
+
+    expect(onRescheduleTask).not.toHaveBeenCalled();
+
+    // 3. Trying to pull Setup Repository's start handle before Phase 1 start (Jan 5) stays clamped (no reschedule)
+    const setupStartHandle = screen.getByLabelText(/resize start date of setup repository/i);
+    fireEvent.pointerDown(setupStartHandle, { clientX: 200, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 40 });
+    expect(screen.getByText(/parent limit/i)).toBeInTheDocument();
+    fireEvent.pointerUp(window, { clientX: 40 });
+
+    expect(onRescheduleTask).not.toHaveBeenCalled();
   });
 
   it('cancels an active bar drag when Escape is pressed without saving changes', () => {
@@ -346,9 +388,9 @@ describe('GanttWorkspace unified split-pane alignment', () => {
       fireEvent.pointerUp(window, { clientX: 160, pointerId: 1, pointerType: 'touch' });
       expect(onRescheduleTask).not.toHaveBeenCalled();
 
-      // 2. Stationary touch hold (>= 260ms) arms drag and reschedules cleanly
+      // 2. Stationary touch hold (>= 260ms) arms drag and reschedules cleanly within parent bounds
       fireEvent.pointerDown(ciBar, {
-        clientX: 100,
+        clientX: 180,
         clientY: 50,
         button: 0,
         pointerId: 2,
@@ -359,14 +401,14 @@ describe('GanttWorkspace unified split-pane alignment', () => {
         vi.advanceTimersByTime(280);
       });
       fireEvent.pointerMove(window, {
-        clientX: 180,
+        clientX: 100,
         clientY: 50,
         pointerId: 2,
         pointerType: 'touch',
       });
-      fireEvent.pointerUp(window, { clientX: 180, pointerId: 2, pointerType: 'touch' });
+      fireEvent.pointerUp(window, { clientX: 100, pointerId: 2, pointerType: 'touch' });
 
-      expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-13', '2026-01-22', true);
+      expect(onRescheduleTask).toHaveBeenCalledWith(3, '2026-01-09', '2026-01-18', true);
     } finally {
       vi.useRealTimers();
     }

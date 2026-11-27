@@ -7,7 +7,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import { computeCriticalPath, computeTaskBaselineSlipDays } from '@/domain/scheduling';
+import {
+  computeCriticalPath,
+  computeTaskBaselineSlipDays,
+  computeTaskDateBoundsMap,
+} from '@/domain/scheduling';
 import { computeTaskStats, flattenTasks, isTaskCompleted } from '@/domain/taskTree';
 import {
   buildTimelineColumns,
@@ -206,6 +210,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const allFlatTasks = useMemo(() => flattenTasks(tasks), [tasks]);
     const stats = useMemo(() => computeTaskStats(tasks), [tasks]);
     const criticalPath = useMemo(() => computeCriticalPath(tasks), [tasks]);
+    const taskDateBounds = useMemo(() => computeTaskDateBoundsMap(tasks), [tasks]);
 
     const visibleTasks = useMemo(
       () =>
@@ -665,6 +670,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                   <TimelineBars
                     visibleTasks={visibleTasks}
                     barGeometries={barGeometries}
+                    taskDateBounds={taskDateBounds}
                     baselineGeometries={baselineGeometries}
                     baseline={baseline}
                     showBaseline={showBaseline}

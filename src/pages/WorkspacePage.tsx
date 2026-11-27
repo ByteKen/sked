@@ -321,6 +321,7 @@ export function WorkspacePage() {
         barHeight: prefs.barHeight,
         taskLabelPosition: prefs.taskLabelPosition,
         granularity: ganttRef.current?.getGranularity(),
+        baseline: currentWorkspace?.baseline,
       });
 
       if (result.ok) {
@@ -329,7 +330,7 @@ export function WorkspacePage() {
         toast.error('Export failed', result.error);
       }
     },
-    [tasks, currentWorkspace?.title],
+    [tasks, currentWorkspace?.title, currentWorkspace?.baseline],
   );
 
   const anyModalOpen =

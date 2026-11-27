@@ -5,6 +5,7 @@ import type {
   TaskLabelPosition,
   ThemeMode,
   TimelineGranularity,
+  WorkspaceBaseline,
 } from '@/types';
 import { exportTasksToCSV } from './csvExporter';
 import { buildExportBaseFilename } from './downloadUtils';
@@ -20,6 +21,7 @@ export interface ExportChartOptions {
   barHeight: BarHeightMode;
   taskLabelPosition: TaskLabelPosition;
   granularity?: TimelineGranularity;
+  baseline?: WorkspaceBaseline | null;
 }
 
 export interface ExportResult {
@@ -79,7 +81,7 @@ export async function exportGanttChart(
         };
       }
       case 'csv':
-        exportTasksToCSV(tasks, filename, options.workspaceTitle);
+        exportTasksToCSV(tasks, filename, options.baseline);
         break;
       case 'json':
         exportTasksToJSON(tasks, filename, options.workspaceTitle);

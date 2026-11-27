@@ -1,10 +1,13 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Check } from '@phosphor-icons/react';
 import {
-  addDaysISO,
+  computeClampedDragDates,
   computeTaskBaselineSlipDays,
   diffDaysISO,
   getInclusiveDurationDays,
+  type ClampedDragResult,
+  type ScheduleDragMode,
+  type TaskDateBounds,
 } from '@/domain/scheduling';
 import { getTaskStatus, isTaskCompleted, isTaskDeadline } from '@/domain/taskTree';
 import { formatDateRange, type TaskBarGeometry } from '@/domain/timeline';
@@ -18,15 +21,14 @@ import type {
 import { cn } from '@/utils/cn';
 import { BAR_HEIGHT_PX, getBarCenterY, STATUS_BAR_STYLES } from './ganttStyles';
 
-type DragMode = 'move' | 'resize-start' | 'resize-end';
-
 interface ActiveBarDrag {
   taskId: number;
   pointerId: number;
   pointerType: string;
-  mode: DragMode;
+  mode: ScheduleDragMode;
   origStart: string;
   origEnd: string;
+  bounds?: TaskDateBounds;
   startClientX: number;
   startClientY: number;
   deltaDays: number;
@@ -41,6 +43,7 @@ const MOUSE_DRAG_THRESHOLD_PX = 5;
 export interface TimelineBarsProps {
   visibleTasks: readonly FlatTask[];
   barGeometries: ReadonlyMap<number, TaskBarGeometry>;
+  taskDateBounds?: ReadonlyMap<number, TaskDateBounds>;
   baselineGeometries?: ReadonlyMap<number, TaskBarGeometry>;
   baseline?: WorkspaceBaseline | null;
   showBaseline?: boolean;
@@ -62,21 +65,14 @@ export interface TimelineBarsProps {
   onBarLeave: () => void;
 }
 
-function computePreviewDates(drag: ActiveBarDrag): { nextStart: string; nextEnd: string } {
-  if (drag.mode === 'move') {
-    return {
-      nextStart: addDaysISO(drag.origStart, drag.deltaDays),
-      nextEnd: addDaysISO(drag.origEnd, drag.deltaDays),
-    };
-  }
-  if (drag.mode === 'resize-start') {
-    const candidate = addDaysISO(drag.origStart, drag.deltaDays);
-    const clamped = diffDaysISO(candidate, drag.origEnd) < 0 ? drag.origEnd : candidate;
-    return { nextStart: clamped, nextEnd: drag.origEnd };
-  }
-  const candidate = addDaysISO(drag.origEnd, drag.deltaDays);
-  const clamped = diffDaysISO(drag.origStart, candidate) < 0 ? drag.origStart : candidate;
-  return { nextStart: drag.origStart, nextEnd: clamped };
+function computePreviewDates(drag: ActiveBarDrag): ClampedDragResult {
+  return computeClampedDragDates({
+    mode: drag.mode,
+    origStart: drag.origStart,
+    origEnd: drag.origEnd,
+    deltaDays: drag.deltaDays,
+    bounds: drag.bounds,
+  });
 }
 
 /**
@@ -88,6 +84,7 @@ function computePreviewDates(drag: ActiveBarDrag): { nextStart: string; nextEnd:
 export const TimelineBars = memo(function TimelineBars({
   visibleTasks,
   barGeometries,
+  taskDateBounds,
   baselineGeometries,
   baseline,
   showBaseline = false,
@@ -265,7 +262,7 @@ export const TimelineBars = memo(function TimelineBars({
   useEffect(() => () => clearHoldTimer(), [clearHoldTimer]);
 
   const startBarDrag = useCallback(
-    (e: React.PointerEvent, task: FlatTask, mode: DragMode) => {
+    (e: React.PointerEvent, task: FlatTask, mode: ScheduleDragMode) => {
       if (!canDrag || e.button !== 0) return;
       if (e.pointerType === 'touch' && !e.isPrimary) return;
 
@@ -280,6 +277,7 @@ export const TimelineBars = memo(function TimelineBars({
         mode,
         origStart: task.start,
         origEnd: task.end,
+        bounds: taskDateBounds?.get(task.id),
         startClientX: e.clientX,
         startClientY: e.clientY,
         deltaDays: 0,
@@ -302,7 +300,7 @@ export const TimelineBars = memo(function TimelineBars({
         }, TOUCH_HOLD_MS);
       }
     },
-    [canDrag, onBarLeave, clearHoldTimer],
+    [canDrag, onBarLeave, clearHoldTimer, taskDateBounds],
   );
 
   return (
@@ -519,9 +517,17 @@ export const TimelineBars = memo(function TimelineBars({
                 <span>{formatDateRange(previewDates.nextStart, previewDates.nextEnd)}</span>
                 <span className="opacity-75">
                   {drag.mode === 'move'
-                    ? `${drag.deltaDays > 0 ? '+' : ''}${drag.deltaDays}d`
+                    ? (() => {
+                        const actualShift = diffDaysISO(drag.origStart, previewDates.nextStart);
+                        return `${actualShift > 0 ? '+' : ''}${actualShift}d`;
+                      })()
                     : `${renderDuration}d`}
                 </span>
+                {previewDates.clampedBy && (
+                  <span className="text-amber-300 dark:text-amber-600">
+                    · {previewDates.clampedBy === 'parent' ? 'Parent limit' : 'Subtask limit'}
+                  </span>
+                )}
               </div>
             )}
 

@@ -9,6 +9,25 @@ export interface RescheduleTaskParams {
   autoCascade?: boolean;
 }
 
+export type ScheduleDragMode = 'move' | 'resize-start' | 'resize-end';
+
+export interface TaskDateBounds {
+  /** Earliest allowed start date (for subtasks, the parent task's start date). */
+  minStart?: string;
+  /** Latest allowed end date (for subtasks, the parent task's end date). */
+  maxEnd?: string;
+  /** Latest allowed start date when edge-resizing a parent without shifting children. */
+  maxResizeStart?: string;
+  /** Earliest allowed end date when edge-resizing a parent without shifting children. */
+  minResizeEnd?: string;
+}
+
+export interface ClampedDragResult {
+  nextStart: string;
+  nextEnd: string;
+  clampedBy: 'parent' | 'child' | null;
+}
+
 export interface RescheduleResult {
   tasks: Task[];
   movedTask: Task | null;
@@ -46,6 +65,173 @@ export function getInclusiveDurationDays(startISO: string, endISO: string): numb
   return Math.max(1, diffDaysISO(startISO, endISO) + 1);
 }
 
+function isBeforeISO(a: string, b: string): boolean {
+  return diffDaysISO(a, b) > 0;
+}
+
+function isAfterISO(a: string, b: string): boolean {
+  return diffDaysISO(b, a) > 0;
+}
+
+export function clampDateISO(iso: string, minISO?: string, maxISO?: string): string {
+  let result = iso;
+  if (minISO && isBeforeISO(result, minISO)) result = minISO;
+  if (maxISO && isAfterISO(result, maxISO)) result = maxISO;
+  return result;
+}
+
+function getDescendantSpan(children: readonly Task[]): { minStart: string; maxEnd: string } | null {
+  if (!children.length) return null;
+  let minStart = children[0]!.start;
+  let maxEnd = children[0]!.end;
+
+  const walk = (list: readonly Task[]) => {
+    for (const child of list) {
+      if (isBeforeISO(child.start, minStart)) minStart = child.start;
+      if (isAfterISO(child.end, maxEnd)) maxEnd = child.end;
+      if (child.children?.length) walk(child.children);
+    }
+  };
+  walk(children);
+  return { minStart, maxEnd };
+}
+
+/**
+ * Computes date-boundary constraints for every task in the tree:
+ * - Subtasks are bounded strictly inside their parent task's [start, end] range.
+ * - Parent tasks cannot be edge-resized narrower than their existing subtasks.
+ */
+export function computeTaskDateBoundsMap(tasks: readonly Task[]): Map<number, TaskDateBounds> {
+  const map = new Map<number, TaskDateBounds>();
+
+  const walk = (list: readonly Task[], parent: Task | null) => {
+    for (const task of list) {
+      const bounds: TaskDateBounds = {};
+      if (parent) {
+        bounds.minStart = parent.start;
+        bounds.maxEnd = parent.end;
+      }
+      if (task.children?.length) {
+        const span = getDescendantSpan(task.children);
+        if (span) {
+          bounds.maxResizeStart = span.minStart;
+          bounds.minResizeEnd = span.maxEnd;
+        }
+      }
+      if (
+        bounds.minStart !== undefined ||
+        bounds.maxEnd !== undefined ||
+        bounds.maxResizeStart !== undefined ||
+        bounds.minResizeEnd !== undefined
+      ) {
+        map.set(task.id, bounds);
+      }
+      if (task.children?.length) {
+        walk(task.children, task);
+      }
+    }
+  };
+
+  walk(tasks, null);
+  return map;
+}
+
+/**
+ * Computes clamped [nextStart, nextEnd] dates for a bar move or edge resize, enforcing:
+ * - Minimum 1-day duration (`start <= end`)
+ * - Subtask containment inside `[bounds.minStart, bounds.maxEnd]`
+ * - Parent containment around existing children when edge-resizing
+ */
+export function computeClampedDragDates(params: {
+  mode: ScheduleDragMode;
+  origStart: string;
+  origEnd: string;
+  deltaDays: number;
+  bounds?: TaskDateBounds;
+}): ClampedDragResult {
+  const { mode, origStart, origEnd, deltaDays, bounds } = params;
+
+  if (mode === 'move') {
+    const unclampedStart = addDaysISO(origStart, deltaDays);
+    const unclampedEnd = addDaysISO(origEnd, deltaDays);
+
+    if (bounds?.minStart && bounds?.maxEnd) {
+      const duration = getInclusiveDurationDays(origStart, origEnd);
+      const parentDuration = getInclusiveDurationDays(bounds.minStart, bounds.maxEnd);
+
+      let nextStart: string;
+      let nextEnd: string;
+      if (duration >= parentDuration) {
+        nextStart = bounds.minStart;
+        nextEnd = bounds.maxEnd;
+      } else {
+        const latestStart = addDaysISO(bounds.maxEnd, -(duration - 1));
+        nextStart = clampDateISO(unclampedStart, bounds.minStart, latestStart);
+        nextEnd = addDaysISO(nextStart, duration - 1);
+      }
+
+      return {
+        nextStart,
+        nextEnd,
+        clampedBy: nextStart !== unclampedStart || nextEnd !== unclampedEnd ? 'parent' : null,
+      };
+    }
+
+    return { nextStart: unclampedStart, nextEnd: unclampedEnd, clampedBy: null };
+  }
+
+  if (mode === 'resize-start') {
+    const candidate = addDaysISO(origStart, deltaDays);
+    let nextStart = isAfterISO(candidate, origEnd) ? origEnd : candidate;
+    let clampedBy: 'parent' | 'child' | null = null;
+
+    if (bounds?.minStart) {
+      const boundedMin = isAfterISO(bounds.minStart, origEnd) ? origEnd : bounds.minStart;
+      if (isBeforeISO(nextStart, boundedMin)) {
+        nextStart = boundedMin;
+        clampedBy = 'parent';
+      }
+    }
+
+    if (bounds?.maxResizeStart && !isAfterISO(origStart, bounds.maxResizeStart)) {
+      const boundedMax = isBeforeISO(bounds.maxResizeStart, origEnd)
+        ? bounds.maxResizeStart
+        : origEnd;
+      if (isAfterISO(nextStart, boundedMax)) {
+        nextStart = boundedMax;
+        clampedBy = 'child';
+      }
+    }
+
+    return { nextStart, nextEnd: origEnd, clampedBy };
+  }
+
+  // mode === 'resize-end'
+  const candidate = addDaysISO(origEnd, deltaDays);
+  let nextEnd = isBeforeISO(candidate, origStart) ? origStart : candidate;
+  let clampedBy: 'parent' | 'child' | null = null;
+
+  if (bounds?.maxEnd) {
+    const boundedMax = isBeforeISO(bounds.maxEnd, origStart) ? origStart : bounds.maxEnd;
+    if (isAfterISO(nextEnd, boundedMax)) {
+      nextEnd = boundedMax;
+      clampedBy = 'parent';
+    }
+  }
+
+  if (bounds?.minResizeEnd && !isBeforeISO(origEnd, bounds.minResizeEnd)) {
+    const boundedMin = isAfterISO(bounds.minResizeEnd, origStart)
+      ? bounds.minResizeEnd
+      : origStart;
+    if (isBeforeISO(nextEnd, boundedMin)) {
+      nextEnd = boundedMin;
+      clampedBy = 'child';
+    }
+  }
+
+  return { nextStart: origStart, nextEnd, clampedBy };
+}
+
 function shiftSubtreeDates(tasks: readonly Task[], deltaDays: number): Task[] {
   if (deltaDays === 0) return tasks.map((t) => ({ ...t }));
   return tasks.map((task) => {
@@ -59,45 +245,6 @@ function shiftSubtreeDates(tasks: readonly Task[], deltaDays: number): Task[] {
       children: task.children?.length ? shiftSubtreeDates(task.children, deltaDays) : [],
     };
   });
-}
-
-function syncAncestorEnvelopes(tasks: readonly Task[], dirtyIds: ReadonlySet<number>): {
-  tasks: Task[];
-  hasDirty: boolean;
-} {
-  let anyDirty = false;
-
-  const mapped = tasks.map((task) => {
-    const selfDirty = dirtyIds.has(task.id);
-    if (!task.children || task.children.length === 0) {
-      if (selfDirty) anyDirty = true;
-      return task;
-    }
-
-    const childResult = syncAncestorEnvelopes(task.children, dirtyIds);
-    if (childResult.hasDirty) {
-      anyDirty = true;
-      // Fit parent envelope to encompass its updated children
-      let minStart = childResult.tasks[0]!.start;
-      let maxEnd = childResult.tasks[0]!.end;
-      for (const child of childResult.tasks) {
-        if (diffDaysISO(minStart, child.start) < 0) minStart = child.start;
-        if (diffDaysISO(maxEnd, child.end) > 0) maxEnd = child.end;
-      }
-      return {
-        ...task,
-        start: minStart,
-        end: maxEnd,
-        isDeadline: minStart === maxEnd,
-        children: childResult.tasks,
-      };
-    }
-
-    if (selfDirty) anyDirty = true;
-    return { ...task, children: childResult.tasks };
-  });
-
-  return { tasks: mapped, hasDirty: anyDirty };
 }
 
 function mapTasksById(tasks: readonly Task[]): Map<number, Task> {
@@ -140,8 +287,10 @@ function applyTaskShiftInTree(
 }
 
 /**
- * Reschedules a task (move or edge-resize), keeps parent phase envelopes accurate,
- * and optionally auto-cascades downstream dependent tasks forward when a blocker pushes past them.
+ * Reschedules a task (move or edge-resize) while strictly preserving parent/child bounds:
+ * - Subtasks stay clamped inside their parent's [start, end] range and never mutate parent dates.
+ * - Moving a parent shifts all its descendants together; resizing a parent cannot cut off children.
+ * - Optionally auto-cascades downstream dependent tasks forward (also respecting parent bounds).
  */
 export function rescheduleTaskInTree(
   tasks: readonly Task[],
@@ -154,14 +303,83 @@ export function rescheduleTaskInTree(
     return { tasks: sanitizeTaskTree(tasks), movedTask: null, cascadedTaskIds: [] };
   }
 
-  // Normalize so start <= end
-  const nextStart = params.nextStart;
-  const nextEnd = diffDaysISO(nextStart, params.nextEnd) < 0 ? nextStart : params.nextEnd;
+  const boundsMap = computeTaskDateBoundsMap(tasks);
+  const targetBounds = boundsMap.get(taskId);
 
-  const startDelta = diffDaysISO(originalTarget.start, nextStart);
+  // Normalize so rawStart <= rawEnd
+  const rawStart = params.nextStart;
+  const rawEnd = isBeforeISO(params.nextEnd, rawStart) ? rawStart : params.nextEnd;
+
+  const rawStartDelta = diffDaysISO(originalTarget.start, rawStart);
+  const rawEndDelta = diffDaysISO(originalTarget.end, rawEnd);
   const oldDuration = getInclusiveDurationDays(originalTarget.start, originalTarget.end);
-  const newDuration = getInclusiveDurationDays(nextStart, nextEnd);
-  const isPureMove = startDelta !== 0 && oldDuration === newDuration;
+  const newDuration = getInclusiveDurationDays(rawStart, rawEnd);
+  const isPureMove = rawStartDelta !== 0 && oldDuration === newDuration;
+  const isResizeStart = rawStartDelta !== 0 && rawEndDelta === 0;
+  const isResizeEnd = rawStartDelta === 0 && rawEndDelta !== 0;
+
+  let nextStart = rawStart;
+  let nextEnd = rawEnd;
+
+  if (isPureMove) {
+    const clamped = computeClampedDragDates({
+      mode: 'move',
+      origStart: originalTarget.start,
+      origEnd: originalTarget.end,
+      deltaDays: rawStartDelta,
+      bounds: targetBounds,
+    });
+    nextStart = clamped.nextStart;
+    nextEnd = clamped.nextEnd;
+  } else if (isResizeStart) {
+    const clamped = computeClampedDragDates({
+      mode: 'resize-start',
+      origStart: originalTarget.start,
+      origEnd: originalTarget.end,
+      deltaDays: rawStartDelta,
+      bounds: targetBounds,
+    });
+    nextStart = clamped.nextStart;
+    nextEnd = clamped.nextEnd;
+  } else if (isResizeEnd) {
+    const clamped = computeClampedDragDates({
+      mode: 'resize-end',
+      origStart: originalTarget.start,
+      origEnd: originalTarget.end,
+      deltaDays: rawEndDelta,
+      bounds: targetBounds,
+    });
+    nextStart = clamped.nextStart;
+    nextEnd = clamped.nextEnd;
+  } else {
+    // Programmatic dual-edge edit: clamp both ends into parent & child bounds
+    nextStart = clampDateISO(rawStart, targetBounds?.minStart, targetBounds?.maxEnd);
+    nextEnd = clampDateISO(rawEnd, targetBounds?.minStart, targetBounds?.maxEnd);
+    if (
+      targetBounds?.maxResizeStart &&
+      !isAfterISO(originalTarget.start, targetBounds.maxResizeStart) &&
+      isAfterISO(nextStart, targetBounds.maxResizeStart)
+    ) {
+      nextStart = targetBounds.maxResizeStart;
+    }
+    if (
+      targetBounds?.minResizeEnd &&
+      !isBeforeISO(originalTarget.end, targetBounds.minResizeEnd) &&
+      isBeforeISO(nextEnd, targetBounds.minResizeEnd)
+    ) {
+      nextEnd = targetBounds.minResizeEnd;
+    }
+    if (isBeforeISO(nextEnd, nextStart)) {
+      nextEnd = nextStart;
+    }
+  }
+
+  const appliedStartDelta = diffDaysISO(originalTarget.start, nextStart);
+  const appliedEndDelta = diffDaysISO(originalTarget.end, nextEnd);
+
+  if (appliedStartDelta === 0 && appliedEndDelta === 0) {
+    return { tasks: sanitizeTaskTree(tasks), movedTask: null, cascadedTaskIds: [] };
+  }
 
   const applyPrimaryUpdate = (list: readonly Task[]): Task[] =>
     list.map((task) => {
@@ -173,7 +391,7 @@ export function rescheduleTaskInTree(
           isDeadline: nextStart === nextEnd,
           children:
             isPureMove && task.children?.length
-              ? shiftSubtreeDates(task.children, startDelta)
+              ? shiftSubtreeDates(task.children, appliedStartDelta)
               : task.children ?? [],
         };
       }
@@ -184,8 +402,6 @@ export function rescheduleTaskInTree(
     });
 
   let workingTree = applyPrimaryUpdate(tasks);
-  const dirtyIds = new Set<number>([taskId]);
-  workingTree = syncAncestorEnvelopes(workingTree, dirtyIds).tasks;
 
   const cascadedSet = new Set<number>();
 
@@ -200,7 +416,7 @@ export function rescheduleTaskInTree(
       }
     }
 
-    // Seed BFS with every task whose end date moved later (target, shifted children, expanded ancestors)
+    // Seed BFS with every task whose end date moved later (target & any shifted children)
     let currentMap = mapTasksById(workingTree);
     const queue: number[] = [];
     for (const [id, cur] of currentMap.entries()) {
@@ -237,18 +453,25 @@ export function rescheduleTaskInTree(
 
         const neededShift = diffDaysISO(currDep.start, minAllowedStart);
         if (neededShift > 0) {
-          workingTree = applyTaskShiftInTree(workingTree, depId, neededShift);
-          workingTree = syncAncestorEnvelopes(workingTree, new Set([depId])).tasks;
-          cascadedSet.add(depId);
+          // Never push a dependent subtask past its parent task's end date
+          const depParent =
+            currDep.parentId != null ? currentMap.get(currDep.parentId) : undefined;
+          const maxShift = depParent ? diffDaysISO(currDep.end, depParent.end) : neededShift;
+          const appliedShift = Math.min(neededShift, maxShift);
 
-          const refreshedMap = mapTasksById(workingTree);
-          for (const [id, nextNode] of refreshedMap.entries()) {
-            const beforeNode = currentMap.get(id);
-            if (beforeNode && diffDaysISO(beforeNode.end, nextNode.end) > 0) {
-              queue.push(id);
+          if (appliedShift > 0) {
+            workingTree = applyTaskShiftInTree(workingTree, depId, appliedShift);
+            cascadedSet.add(depId);
+
+            const refreshedMap = mapTasksById(workingTree);
+            for (const [id, nextNode] of refreshedMap.entries()) {
+              const beforeNode = currentMap.get(id);
+              if (beforeNode && diffDaysISO(beforeNode.end, nextNode.end) > 0) {
+                queue.push(id);
+              }
             }
+            currentMap = refreshedMap;
           }
-          currentMap = refreshedMap;
         }
       }
     }
