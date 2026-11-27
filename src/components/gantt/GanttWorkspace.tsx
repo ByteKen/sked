@@ -661,6 +661,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     showDependencyLines={viewPrefs.showDependencyLines}
                     showSubtaskConnectors={viewPrefs.showSubtaskConnectors}
                     showTaskDescriptions={showTaskDescriptions}
+                    showBaseline={showBaseline}
                     showCriticalPath={showCriticalPath}
                     criticalEdgeKeys={criticalPath.criticalEdgeKeys}
                     totalWidth={totalWidth}

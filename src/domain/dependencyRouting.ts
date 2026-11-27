@@ -8,9 +8,17 @@ export interface RoutableBarNode {
   rowIndex: number;
   left: number;
   right: number;
-  /** Optional extended right edge covering outside text labels (soft obstacle). */
+  /** Optional extended right edge covering outside/top/description text labels. */
   labelRight?: number;
+  /** True when the node renders a text label inline to the right of the bar at centerY. */
+  hasOutsideLabel?: boolean;
   centerY: number;
+}
+
+export interface ReservedVerticalChannel {
+  x: number;
+  minRow: number;
+  maxRow: number;
 }
 
 export interface RouteDependencyParams {
@@ -21,6 +29,7 @@ export interface RouteDependencyParams {
   rowOffsetY?: number;
   sourceLaneIndex?: number;
   targetLaneIndex?: number;
+  reservedVerticals?: readonly ReservedVerticalChannel[];
   cornerRadius?: number;
   arrowTipInset?: number;
 }
@@ -30,10 +39,37 @@ export interface RoutedDependencyPath {
   svgPath: string;
 }
 
-const BAR_CLEARANCE_PX = 8;
-const VERTICAL_ESCAPE_PAD_PX = 12;
-const LABEL_DETOUR_MAX_PX = 360;
-const LANE_STEP_PX = 6;
+const BAR_CLEARANCE_PX = 10;
+const VERTICAL_ESCAPE_PAD_PX = 14;
+const LABEL_DETOUR_MAX_PX = 1600;
+const LANE_STEP_PX = 8;
+
+const NARROW_CHARS = new Set('ilI1tfrj.,:;|()[]! ');
+const WIDE_CHARS = new Set('WMmw@%&');
+
+/**
+ * Pure proportional text-width estimator matching sans-serif UI fonts within a few pixels,
+ * so dependency routing avoids text labels reliably in both browser DOM and headless tests.
+ */
+export function estimateLabelTextWidthPx(text: string, fontSizePx = 12): number {
+  if (!text) return 0;
+  let units = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (ch === ' ') {
+      units += 0.45;
+    } else if (NARROW_CHARS.has(ch)) {
+      units += 0.58;
+    } else if (WIDE_CHARS.has(ch)) {
+      units += 1.38;
+    } else if (ch >= 'A' && ch <= 'Z') {
+      units += 1.18;
+    } else {
+      units += 1.0;
+    }
+  }
+  return Math.ceil(units * fontSizePx * 0.6 + 8);
+}
 
 function hitsBarHorizontally(x: number, bar: RoutableBarNode, pad = BAR_CLEARANCE_PX): boolean {
   return x >= bar.left - pad && x <= bar.right + pad;
@@ -48,7 +84,11 @@ function hitsBarOrLabelHorizontally(
   return x >= bar.left - pad && x <= rightEdge + pad;
 }
 
-function anyBarBlocksX(x: number, bars: readonly RoutableBarNode[], includeLabels: boolean): boolean {
+function anyBarBlocksX(
+  x: number,
+  bars: readonly RoutableBarNode[],
+  includeLabels: boolean,
+): boolean {
   for (const bar of bars) {
     if (includeLabels ? hitsBarOrLabelHorizontally(x, bar) : hitsBarHorizontally(x, bar)) {
       return true;
@@ -57,17 +97,36 @@ function anyBarBlocksX(x: number, bars: readonly RoutableBarNode[], includeLabel
   return false;
 }
 
+function conflictsWithReservedVertical(
+  x: number,
+  minRow: number,
+  maxRow: number,
+  reserved: readonly ReservedVerticalChannel[] | undefined,
+): boolean {
+  if (!reserved?.length) return false;
+  for (const ch of reserved) {
+    const rowsOverlap = minRow <= ch.maxRow && maxRow >= ch.minRow;
+    if (rowsOverlap && Math.abs(x - ch.x) < LANE_STEP_PX - 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
- * Advances `startX` rightward until it clears every obstacle bar (and optionally
- * outside labels if the detour stays compact).
+ * Advances `startX` rightward until it clears every obstacle bar and text label
+ * (plus any already-reserved vertical dependency channels on overlapping rows).
  */
 function findClearRightX(
   startX: number,
   bars: readonly RoutableBarNode[],
   preferClearLabels: boolean,
+  minRow: number,
+  maxRow: number,
+  reserved?: readonly ReservedVerticalChannel[],
 ): number {
   let x = startX;
-  for (let pass = 0; pass <= bars.length; pass++) {
+  for (let pass = 0; pass <= bars.length + (reserved?.length ?? 0) + 2; pass++) {
     let pushed = false;
     for (const bar of bars) {
       if (hitsBarHorizontally(x, bar)) {
@@ -75,12 +134,16 @@ function findClearRightX(
         pushed = true;
       }
     }
+    if (conflictsWithReservedVertical(x, minRow, maxRow, reserved)) {
+      x += LANE_STEP_PX;
+      pushed = true;
+    }
     if (!pushed) break;
   }
 
   if (preferClearLabels) {
     let labelX = x;
-    for (let pass = 0; pass <= bars.length; pass++) {
+    for (let pass = 0; pass <= bars.length + (reserved?.length ?? 0) + 4; pass++) {
       let pushed = false;
       for (const bar of bars) {
         if (hitsBarOrLabelHorizontally(labelX, bar)) {
@@ -88,6 +151,10 @@ function findClearRightX(
           labelX = edge + VERTICAL_ESCAPE_PAD_PX;
           pushed = true;
         }
+      }
+      if (conflictsWithReservedVertical(labelX, minRow, maxRow, reserved)) {
+        labelX += LANE_STEP_PX;
+        pushed = true;
       }
       if (!pushed) break;
     }
@@ -173,10 +240,10 @@ export function polylineToRoundedSvgPath(points: readonly Point2D[], radius = 6)
 /**
  * Computes a clean, obstacle-avoiding orthogonal route between two Gantt bars.
  *
- * - Prefers a direct 2-corner forward elbow when clear of intermediate bars.
- * - When bars overlap or a direct drop would cut through intermediate tasks,
- *   drops cleanly outside blocking bars to the empty horizontal row seam
- *   adjacent to the target row (never crossing intermediate bars or top labels).
+ * - Prefers a direct 2-corner forward elbow ONLY when a vertical channel clears BOTH
+ *   intermediate bars AND outside/top text labels (and clears the source's own outside label).
+ * - Otherwise routes cleanly around all blocking bars and text labels to the empty horizontal
+ *   row seam adjacent to the target row (never slicing through intermediate bars or labels).
  */
 export function routeDependencyArrow(params: RouteDependencyParams): RoutedDependencyPath {
   const {
@@ -187,6 +254,7 @@ export function routeDependencyArrow(params: RouteDependencyParams): RoutedDepen
     rowOffsetY = 0,
     sourceLaneIndex = 0,
     targetLaneIndex = 0,
+    reservedVerticals,
     cornerRadius = 6,
     arrowTipInset = 5,
   } = params;
@@ -199,7 +267,7 @@ export function routeDependencyArrow(params: RouteDependencyParams): RoutedDepen
 
   // Same row edge case
   if (source.rowIndex === target.rowIndex) {
-    if (toX >= fromX + arrowTipInset + 4) {
+    if (toX >= fromX + arrowTipInset + 4 && !source.hasOutsideLabel) {
       const pts = simplifyCollinearPoints([
         { x: fromX, y: fromY },
         { x: endX, y: toY },
@@ -207,7 +275,7 @@ export function routeDependencyArrow(params: RouteDependencyParams): RoutedDepen
       return { points: pts, svgPath: polylineToRoundedSvgPath(pts, cornerRadius) };
     }
     const seamY = rowOffsetY + source.rowIndex * rowHeight;
-    const exitX = fromX + 12 + sourceLaneIndex * LANE_STEP_PX;
+    const exitX = fromX + 10 + sourceLaneIndex * LANE_STEP_PX;
     const entryX = toX - 12 - targetLaneIndex * LANE_STEP_PX;
     const pts = simplifyCollinearPoints([
       { x: fromX, y: fromY },
@@ -226,20 +294,30 @@ export function routeDependencyArrow(params: RouteDependencyParams): RoutedDepen
 
   const minExitStub = 12 + sourceLaneIndex * LANE_STEP_PX;
   const minEntryStub = 12 + targetLaneIndex * LANE_STEP_PX;
+  const sourceOwnOutsideRight =
+    source.hasOutsideLabel && source.labelRight ? source.labelRight : fromX;
 
   // Case 1: Target starts cleanly to the right of source -> try clean 2-turn direct elbow
-  if (toX >= fromX + minExitStub + minEntryStub) {
+  // ONLY if the vertical channel clears ALL intermediate bars AND text labels (never slice text!)
+  if (toX >= fromX + minExitStub + minEntryStub && !source.hasOutsideLabel) {
     const preferredNearSource = fromX + minExitStub;
     const preferredNearTarget = toX - minEntryStub;
     const midpointX = (preferredNearSource + preferredNearTarget) / 2;
-    const candidates = [preferredNearSource, preferredNearTarget, midpointX];
 
-    // Prefer a channel clear of BOTH bars and outside text labels first
-    let chosenElbowX = candidates.find((cx) => !anyBarBlocksX(cx, betweenBars, true));
-    // Fallback to a channel clear of all solid bars
-    if (chosenElbowX === undefined) {
-      chosenElbowX = candidates.find((cx) => !anyBarBlocksX(cx, betweenBars, false));
+    const candidates: number[] = [preferredNearSource, preferredNearTarget, midpointX];
+    // Also test clean gaps immediately past any intermediate label that still fit before target
+    for (const bar of betweenBars) {
+      const gapX = Math.max(bar.right, bar.labelRight ?? bar.right) + VERTICAL_ESCAPE_PAD_PX;
+      if (gapX >= preferredNearSource && gapX <= preferredNearTarget) {
+        candidates.push(gapX);
+      }
     }
+
+    const chosenElbowX = candidates.find(
+      (cx) =>
+        !anyBarBlocksX(cx, betweenBars, true) &&
+        !conflictsWithReservedVertical(cx, minRow, maxRow, reservedVerticals),
+    );
 
     if (chosenElbowX !== undefined) {
       const pts = simplifyCollinearPoints([
@@ -252,22 +330,81 @@ export function routeDependencyArrow(params: RouteDependencyParams): RoutedDepen
     }
   }
 
-  // Case 2: Tight/overlapping bars or obstructed direct channel -> route cleanly along the
-  // empty horizontal row seam immediately adjacent to the target row.
+  // Case 2: Tight/overlapping bars, source outside label, or text-obstructed direct channel ->
+  // route cleanly around ALL intermediate bars & labels to the empty horizontal row seam.
   const goingDown = target.rowIndex > source.rowIndex;
-  const seamY = goingDown
+  const targetSeamY = goingDown
     ? rowOffsetY + target.rowIndex * rowHeight
     : rowOffsetY + (target.rowIndex + 1) * rowHeight;
 
-  const baseExitX = fromX + minExitStub;
-  const clearExitX = findClearRightX(baseExitX, betweenBars, true);
   const entryX = toX - minEntryStub;
+
+  // When source itself has an inline outside label at centerY, step immediately onto the empty
+  // seam adjacent to source so the horizontal exit never runs through source's own label text.
+  if (source.hasOutsideLabel) {
+    const sourceSeamY = goingDown
+      ? rowOffsetY + (source.rowIndex + 1) * rowHeight
+      : rowOffsetY + source.rowIndex * rowHeight;
+    const shortStubX = fromX + 8;
+
+    // Adjacent row: sourceSeamY === targetSeamY, so glide straight along the empty shared seam!
+    if (Math.abs(sourceSeamY - targetSeamY) < 0.25) {
+      const pts = simplifyCollinearPoints([
+        { x: fromX, y: fromY },
+        { x: shortStubX, y: fromY },
+        { x: shortStubX, y: targetSeamY },
+        { x: entryX, y: targetSeamY },
+        { x: entryX, y: toY },
+        { x: endX, y: toY },
+      ]);
+      return { points: pts, svgPath: polylineToRoundedSvgPath(pts, cornerRadius) };
+    }
+
+    // Multi-row span from a source with an outside label: drop vertically in a channel clear
+    // of all intermediate bars & labels (starting at least past source's outside label or near entry)
+    const canDropAtEntry =
+      !anyBarBlocksX(entryX, betweenBars, true) &&
+      !conflictsWithReservedVertical(entryX, minRow, maxRow, reservedVerticals);
+
+    const dropX = canDropAtEntry
+      ? entryX
+      : findClearRightX(
+          Math.max(fromX + minExitStub, sourceOwnOutsideRight + VERTICAL_ESCAPE_PAD_PX),
+          betweenBars,
+          true,
+          minRow,
+          maxRow,
+          reservedVerticals,
+        );
+
+    const pts = simplifyCollinearPoints([
+      { x: fromX, y: fromY },
+      { x: shortStubX, y: fromY },
+      { x: shortStubX, y: sourceSeamY },
+      { x: dropX, y: sourceSeamY },
+      { x: dropX, y: targetSeamY },
+      { x: entryX, y: targetSeamY },
+      { x: entryX, y: toY },
+      { x: endX, y: toY },
+    ]);
+    return { points: pts, svgPath: polylineToRoundedSvgPath(pts, cornerRadius) };
+  }
+
+  const baseExitX = fromX + minExitStub;
+  const clearExitX = findClearRightX(
+    baseExitX,
+    betweenBars,
+    true,
+    minRow,
+    maxRow,
+    reservedVerticals,
+  );
 
   const pts = simplifyCollinearPoints([
     { x: fromX, y: fromY },
     { x: clearExitX, y: fromY },
-    { x: clearExitX, y: seamY },
-    { x: entryX, y: seamY },
+    { x: clearExitX, y: targetSeamY },
+    { x: entryX, y: targetSeamY },
     { x: entryX, y: toY },
     { x: endX, y: toY },
   ]);

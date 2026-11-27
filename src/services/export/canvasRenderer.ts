@@ -1,4 +1,9 @@
-import { routeDependencyArrow, type RoutableBarNode } from '@/domain/dependencyRouting';
+import {
+  estimateLabelTextWidthPx,
+  routeDependencyArrow,
+  type ReservedVerticalChannel,
+  type RoutableBarNode,
+} from '@/domain/dependencyRouting';
 import { buildExportPagePlan } from '@/domain/exportPagination';
 import { flattenTasks, getTaskStatus, isTaskCompleted, isTaskDeadline } from '@/domain/taskTree';
 import {
@@ -310,15 +315,16 @@ export function renderGanttPages(
     geomMap.set(task.id, geom);
 
     const right = geom.left + Math.max(24, geom.width);
+    const hasOutside = options.taskLabelPosition === 'outside' || task.isSubtask || isTaskDeadline(task);
     const node: RoutableBarNode = {
       id: task.id,
       rowIndex: idx,
       left: geom.left,
       right,
-      labelRight:
-        options.taskLabelPosition === 'outside'
-          ? right + Math.min(200, task.name.length * 5.8 + 20)
-          : right,
+      labelRight: hasOutside
+        ? right + 8 + Math.min(250, estimateLabelTextWidthPx(task.name, 10) + 28)
+        : right,
+      hasOutsideLabel: hasOutside,
       centerY: idx * rowHeightPx + rowHeightPx / 2,
     };
     globalNodes.push(node);
@@ -336,6 +342,7 @@ export function renderGanttPages(
   if (options.showDependencyLines) {
     const sourceLaneCounts = new Map<number, number>();
     const targetLaneCounts = new Map<number, number>();
+    const reservedVerticals: ReservedVerticalChannel[] = [];
 
     flatTasks.forEach((task) => {
       if (!task.dependencies?.length) return;
@@ -359,9 +366,22 @@ export function renderGanttPages(
           rowOffsetY: 0,
           sourceLaneIndex,
           targetLaneIndex,
+          reservedVerticals,
           cornerRadius: 5,
           arrowTipInset: 6,
         });
+
+        for (let i = 0; i < routed.points.length - 1; i++) {
+          const a = routed.points[i]!;
+          const b = routed.points[i + 1]!;
+          if (Math.abs(a.x - b.x) < 0.25 && Math.abs(b.y - a.y) > rowHeightPx * 0.75) {
+            reservedVerticals.push({
+              x: a.x,
+              minRow: Math.floor(Math.min(a.y, b.y) / rowHeightPx),
+              maxRow: Math.floor(Math.max(a.y, b.y) / rowHeightPx),
+            });
+          }
+        }
 
         const ys = routed.points.map((p) => p.y);
         routedDeps.push({

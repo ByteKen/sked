@@ -1,5 +1,10 @@
 import { memo, useMemo } from 'react';
-import { routeDependencyArrow, type RoutableBarNode } from '@/domain/dependencyRouting';
+import {
+  estimateLabelTextWidthPx,
+  routeDependencyArrow,
+  type ReservedVerticalChannel,
+  type RoutableBarNode,
+} from '@/domain/dependencyRouting';
 import { isTaskDeadline } from '@/domain/taskTree';
 import type { TaskBarGeometry } from '@/domain/timeline';
 import type {
@@ -20,6 +25,7 @@ export interface DependencyLayerProps {
   showDependencyLines: boolean;
   showSubtaskConnectors: boolean;
   showTaskDescriptions: boolean;
+  showBaseline?: boolean;
   showCriticalPath?: boolean;
   criticalEdgeKeys?: ReadonlySet<string>;
   totalWidth: number;
@@ -41,6 +47,7 @@ export const DependencyLayer = memo(function DependencyLayer({
   showDependencyLines,
   showSubtaskConnectors,
   showTaskDescriptions,
+  showBaseline = false,
   showCriticalPath = false,
   criticalEdgeKeys,
   totalWidth,
@@ -55,25 +62,31 @@ export const DependencyLayer = memo(function DependencyLayer({
     visibleTasks.forEach((task, rowIndex) => {
       const geom = barGeometries.get(task.id);
       if (!geom) return;
-      const isSub = task.isSubtask || isTaskDeadline(task);
+      const deadline = isTaskDeadline(task);
+      const isSub = task.isSubtask || deadline;
       const labelPos = isSub ? subtaskLabelPosition : taskLabelPosition;
       const centerY =
         rowIndex * rowHeight +
         getBarCenterY(rowHeight, barHeightPx, labelPos === 'top', showTaskDescriptions);
       const right = geom.left + geom.width;
-      const deadline = isTaskDeadline(task);
-      const progressSuffixLen = task.progress > 0 && !deadline ? String(task.progress).length + 3 : 0;
+
+      // Match TimelineBars.tsx rendered text containers (maxWidth: 250px outside, 240px top)
+      const progressPx = task.progress > 0 && !deadline ? 36 : 0;
+      const baselineBadgePx = showBaseline ? 42 : 0;
       const outsideLabelWidth =
         labelPos === 'outside'
-          ? 8 + Math.min(210, (task.name.length + progressSuffixLen) * 6.8 + 10)
-          : 0;
+          ? 8 + Math.min(250, estimateLabelTextWidthPx(task.name, 12) + progressPx + baselineBadgePx)
+          : showBaseline
+            ? 8 + baselineBadgePx
+            : 0;
       const topLabelRight =
         labelPos === 'top'
-          ? geom.left + Math.min(240, (task.name.length + progressSuffixLen) * 6.5 + 10)
+          ? geom.left + Math.min(240, estimateLabelTextWidthPx(task.name, 11) + progressPx)
           : right;
       const descRight =
         showTaskDescriptions && task.description
-          ? geom.left + Math.min(Math.max(geom.width, 280), task.description.length * 6.2 + 12)
+          ? geom.left +
+            Math.min(Math.max(geom.width, 280), estimateLabelTextWidthPx(task.description, 11))
           : right;
       const labelRight = Math.max(right + outsideLabelWidth, topLabelRight, descRight);
 
@@ -84,6 +97,7 @@ export const DependencyLayer = memo(function DependencyLayer({
         left: geom.left,
         right,
         labelRight,
+        hasOutsideLabel: labelPos === 'outside',
         width: geom.width,
         centerY,
       };
@@ -104,6 +118,7 @@ export const DependencyLayer = memo(function DependencyLayer({
     if (showDependencyLines) {
       const sourceLaneCounts = new Map<number, number>();
       const targetLaneCounts = new Map<number, number>();
+      const reservedVerticals: ReservedVerticalChannel[] = [];
 
       visibleTasks.forEach((task) => {
         if (!task.dependencies?.length) return;
@@ -127,9 +142,21 @@ export const DependencyLayer = memo(function DependencyLayer({
             rowHeight,
             sourceLaneIndex,
             targetLaneIndex,
+            reservedVerticals,
             cornerRadius: 6,
             arrowTipInset: 5,
           });
+
+          // Record major vertical drop channels so subsequent overlapping arrows stagger cleanly
+          for (let i = 0; i < routed.points.length - 1; i++) {
+            const a = routed.points[i]!;
+            const b = routed.points[i + 1]!;
+            if (Math.abs(a.x - b.x) < 0.25 && Math.abs(b.y - a.y) > rowHeight * 0.75) {
+              const segMinRow = Math.floor(Math.min(a.y, b.y) / rowHeight);
+              const segMaxRow = Math.floor(Math.max(a.y, b.y) / rowHeight);
+              reservedVerticals.push({ x: a.x, minRow: segMinRow, maxRow: segMaxRow });
+            }
+          }
 
           computedDeps.push({
             key: `dep-${depId}-${task.id}`,
@@ -172,6 +199,7 @@ export const DependencyLayer = memo(function DependencyLayer({
     showDependencyLines,
     showSubtaskConnectors,
     showTaskDescriptions,
+    showBaseline,
   ]);
 
   if (depPaths.length === 0 && subtaskPaths.length === 0) {
