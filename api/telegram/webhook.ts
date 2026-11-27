@@ -68,6 +68,8 @@ interface StoredLinkToken {
   expiresAtMs: number;
 }
 
+const LINK_TOKEN_PATTERN = /^[A-Za-z0-9_-]{12,64}$/;
+
 function safeCompareSecret(provided: string | undefined, expected: string | undefined): boolean {
   if (!provided || !expected) return false;
   const a = Buffer.from(provided);
@@ -380,10 +382,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             '<b>👋 Welcome to Sked Bot</b>',
             '',
             'To connect your account, open <b>Settings → Bot &amp; Alerts</b> in Sked and click <b>Connect Telegram</b>.',
-            baseUrl ? `\n<a href="${baseUrl}">Open Sked</a>` : '',
+            baseUrl ? `\n<a href="${escapeTelegramHtml(baseUrl)}">Open Sked</a>` : '',
           ]
             .filter(Boolean)
             .join('\n'),
+        );
+        return res.status(200).json({ ok: true });
+      }
+
+      if (token.startsWith('__') || !LINK_TOKEN_PATTERN.test(token)) {
+        await sendTelegramMessage(
+          chatIdStr,
+          '⚠️ This connection link is invalid or was already used. Please generate a fresh link from <b>Settings → Bot &amp; Alerts</b> in Sked.',
         );
         return res.status(200).json({ ok: true });
       }

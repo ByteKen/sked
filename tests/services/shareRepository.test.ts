@@ -28,6 +28,7 @@ vi.mock('@/config/firebase', () => ({
 }));
 
 import {
+  checkSharedChartEditorAccess,
   commitCollaborativeChartMutation,
   disableWorkspaceShare,
   enableWorkspaceShare,
@@ -73,9 +74,13 @@ describe('shareRepository', () => {
     expect(updated.shareId).toMatch(/^[A-Za-z0-9]{16}$/);
     expect(mockSetDoc).toHaveBeenCalledTimes(2);
     expect(mockDoc).toHaveBeenCalledWith({}, 'sharedCharts', updated.shareId);
+    // Public sharedCharts document must never expose an editorEmails array
+    const [, publicPayload] = mockSetDoc.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(publicPayload.hasEditors).toBe(false);
+    expect(publicPayload).not.toHaveProperty('editorEmails');
   });
 
-  it('regenerates share link and deletes the old public document', async () => {
+  it('regenerates share link, isolates editorEmails in sharedChartAccess, and deletes old docs', async () => {
     const sharedWorkspace: Workspace = {
       ...baseWorkspace,
       isShared: true,
@@ -93,8 +98,21 @@ describe('shareRepository', () => {
 
     expect(regenerated.shareId).not.toBe('OldShareId123456');
     expect(regenerated.editorEmails).toEqual(['maya@gmail.com']);
+    const publicWrite = mockSetDoc.mock.calls.find(
+      (call) => (call[0] as { collection?: string }).collection === 'sharedCharts',
+    );
+    const accessWrite = mockSetDoc.mock.calls.find(
+      (call) => (call[0] as { collection?: string }).collection === 'sharedChartAccess',
+    );
+    expect((publicWrite?.[1] as Record<string, unknown>).hasEditors).toBe(true);
+    expect(publicWrite?.[1]).not.toHaveProperty('editorEmails');
+    expect((accessWrite?.[1] as Record<string, unknown>).editorEmails).toEqual(['maya@gmail.com']);
     expect(mockDeleteDoc).toHaveBeenCalledWith({
       collection: 'sharedCharts',
+      id: 'OldShareId123456',
+    });
+    expect(mockDeleteDoc).toHaveBeenCalledWith({
+      collection: 'sharedChartAccess',
       id: 'OldShareId123456',
     });
   });
@@ -132,17 +150,35 @@ describe('shareRepository', () => {
     });
   });
 
-  it('syncs live task updates using updateDoc so deleted shares are not recreated', async () => {
+  it('syncs live task updates using updateDoc and mirrors title updates to private sharedChartAccess', async () => {
     await syncSharedChart('LiveShare1234567', {
       title: 'Renamed Plan',
       tasks: [{ id: 1, name: 'Milestone', start: '2026-02-01', end: '2026-02-01', progress: 100 }],
     });
 
-    expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(2);
     const [ref, payload] = mockUpdateDoc.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(ref).toEqual({ collection: 'sharedCharts', id: 'LiveShare1234567' });
     expect(payload.title).toBe('Renamed Plan');
     expect(Array.isArray(payload.tasks)).toBe(true);
+
+    const [accessRef, accessPayload] = mockUpdateDoc.mock.calls[1] as [
+      unknown,
+      Record<string, unknown>,
+    ];
+    expect(accessRef).toEqual({ collection: 'sharedChartAccess', id: 'LiveShare1234567' });
+    expect(accessPayload.title).toBe('Renamed Plan');
+
+    // Task-only live sync writes ONCE (sharedCharts only, zero extra write to sharedChartAccess)
+    mockUpdateDoc.mockClear();
+    await syncSharedChart('LiveShare1234567', {
+      tasks: [{ id: 1, name: 'Milestone', start: '2026-02-01', end: '2026-02-02', progress: 100 }],
+    });
+    expect(mockUpdateDoc).toHaveBeenCalledTimes(1);
+    expect(mockUpdateDoc.mock.calls[0]?.[0]).toEqual({
+      collection: 'sharedCharts',
+      id: 'LiveShare1234567',
+    });
   });
 
   it('auto-enables sharing when inviting the first editor email and normalizes addresses', async () => {
@@ -157,9 +193,30 @@ describe('shareRepository', () => {
 
     expect(updated.isShared).toBe(true);
     expect(updated.editorEmails).toEqual(['maya@example.com']);
+    const accessWrite = mockSetDoc.mock.calls.find(
+      (call) => (call[0] as { collection?: string }).collection === 'sharedChartAccess',
+    );
+    expect((accessWrite?.[1] as Record<string, unknown>).editorEmails).toEqual(['maya@example.com']);
   });
 
-  it('commits collaborative updates inside a single Firestore transaction and skips no-op writes', async () => {
+  it('checks private sharedChartAccess permissions and fails closed on denial', async () => {
+    mockGetDoc.mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({
+        shareId: 'Share123',
+        ownerId: 'owner-1',
+        editorEmails: ['maya@example.com'],
+      }),
+    });
+    await expect(checkSharedChartEditorAccess('Share123', 'MAYA@example.com')).resolves.toBe(true);
+
+    mockGetDoc.mockRejectedValueOnce(new Error('Missing or insufficient permissions.'));
+    await expect(checkSharedChartEditorAccess('Share123', 'stranger@example.com')).resolves.toBe(
+      false,
+    );
+  });
+
+  it('commits collaborative updates inside a single Firestore transaction without leaking editor email', async () => {
     const txUpdate = vi.fn();
     mockRunTransaction.mockImplementation(
       async (_db: unknown, runner: (tx: unknown) => Promise<unknown>) =>
@@ -183,15 +240,15 @@ describe('shareRepository', () => {
     // 1. No-op mutation skips tx.update completely (0 Firestore writes!)
     await commitCollaborativeChartMutation({
       shareId: 'Collab1234567890',
-      editor: { uid: 'ed-1', name: 'Maya', email: 'maya@example.com' },
+      editor: { uid: 'ed-1', name: 'Maya' },
       mutate: (curr) => ({ tasks: curr.tasks, nextId: curr.nextId }),
     });
     expect(txUpdate).not.toHaveBeenCalled();
 
-    // 2. Real mutation bumps version and stamps lastEditedBy in 1 single update
+    // 2. Real mutation bumps version and stamps lastEditedBy (uid, name, at only — zero email PII)
     const res = await commitCollaborativeChartMutation({
       shareId: 'Collab1234567890',
-      editor: { uid: 'ed-1', name: 'Maya', email: 'MAYA@example.com' },
+      editor: { uid: 'ed-1', name: 'Maya' },
       mutate: (curr) => ({
         tasks: curr.tasks.map((t) => ({ ...t, progress: 100, isDone: true })),
         nextId: curr.nextId,
@@ -202,6 +259,7 @@ describe('shareRepository', () => {
     expect(txUpdate).toHaveBeenCalledTimes(1);
     const [, patch] = txUpdate.mock.calls[0] as [unknown, Record<string, unknown>];
     expect(patch.version).toBe(4);
-    expect((patch.lastEditedBy as { email?: string }).email).toBe('maya@example.com');
+    expect(patch.lastEditedBy).toMatchObject({ uid: 'ed-1', name: 'Maya' });
+    expect(patch.lastEditedBy).not.toHaveProperty('email');
   });
 });

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   isValidISODate,
+  MAX_IMPORT_BYTES,
+  MAX_IMPORT_DEPTH,
+  MAX_IMPORT_TASKS,
   validateImportJson,
   validateTaskDraft,
   validateWorkspaceName,
@@ -81,5 +84,40 @@ describe('validation domain logic', () => {
     );
     expect(ok.errors).toEqual([]);
     expect(ok.tasks).toHaveLength(1);
+  });
+
+  it('enforces size, depth, and task count limits on JSON imports', () => {
+    const oversized = ' '.repeat(MAX_IMPORT_BYTES + 16);
+    const sizeRes = validateImportJson(oversized);
+    expect(sizeRes.tasks).toBeNull();
+    expect(sizeRes.errors[0]?.message).toContain('size limit');
+
+    // Deeply nested task tree beyond MAX_IMPORT_DEPTH
+    let nested: Record<string, unknown> = {
+      name: 'Leaf Task',
+      start: '2026-01-01',
+      end: '2026-01-02',
+    };
+    for (let i = 0; i <= MAX_IMPORT_DEPTH + 1; i++) {
+      nested = {
+        name: `Level ${i}`,
+        start: '2026-01-01',
+        end: '2026-01-02',
+        children: [nested],
+      };
+    }
+    const depthRes = validateImportJson(JSON.stringify({ tasks: [nested] }));
+    expect(depthRes.tasks).toBeNull();
+    expect(depthRes.errors.some((e) => e.message.includes('maximum depth'))).toBe(true);
+
+    // Task count above MAX_IMPORT_TASKS
+    const tooMany = Array.from({ length: MAX_IMPORT_TASKS + 1 }, (_, idx) => ({
+      name: `Task ${idx + 1}`,
+      start: '2026-01-01',
+      end: '2026-01-02',
+    }));
+    const countRes = validateImportJson(JSON.stringify({ tasks: tooMany }));
+    expect(countRes.tasks).toBeNull();
+    expect(countRes.errors.some((e) => e.message.includes('maximum limit'))).toBe(true);
   });
 });

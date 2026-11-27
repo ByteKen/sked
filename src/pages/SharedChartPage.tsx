@@ -50,6 +50,7 @@ import { setTaskStatusInTree, TASK_STATUS_LABELS } from '@/domain/taskViews';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { exportGanttChart } from '@/services/export';
 import {
+  checkSharedChartEditorAccess,
   commitCollaborativeChartMutation,
   subscribeToSharedChart,
   type CollaborativeChartMutationResult,
@@ -110,8 +111,31 @@ export function SharedChartPage() {
   const progressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingProgressUpdatesRef = useRef<Map<number, number>>(new Map());
 
-  const canEdit = useMemo(() => canUserEditSharedChart(chart, user), [chart, user]);
-  const hasInvitedEditors = Boolean(chart?.editorEmails && chart.editorEmails.length > 0);
+  const [hasPrivateEditorAccess, setHasPrivateEditorAccess] = useState(false);
+
+  const hasInvitedEditors = Boolean(
+    chart?.hasEditors || (chart?.editorEmails && chart.editorEmails.length > 0),
+  );
+  const directCanEdit = useMemo(() => canUserEditSharedChart(chart, user), [chart, user]);
+  const canEdit = directCanEdit || hasPrivateEditorAccess;
+
+  useEffect(() => {
+    if (!shareId || !user?.email || !chart || directCanEdit || !hasInvitedEditors) {
+      setHasPrivateEditorAccess(false);
+      return;
+    }
+
+    let cancelled = false;
+    void checkSharedChartEditorAccess(shareId, user.email).then((allowed) => {
+      if (!cancelled) {
+        setHasPrivateEditorAccess(allowed);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shareId, user?.email, chart, directCanEdit, hasInvitedEditors]);
 
   useEffect(() => {
     if (!shareId) {
@@ -164,8 +188,7 @@ export function SharedChartPage() {
           shareId,
           editor: {
             uid: user.id,
-            name: user.name || user.email || 'Collaborator',
-            email: user.email,
+            name: user.name || 'Collaborator',
           },
           mutate,
         });

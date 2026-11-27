@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { SharedChart } from '@/types';
 
 const mockSubscribe = vi.fn();
 const mockCommitCollab = vi.fn();
+const mockCheckEditorAccess = vi.fn();
 
 vi.mock('@/services/shareRepository', () => ({
   subscribeToSharedChart: (...args: unknown[]) => mockSubscribe(...args),
   commitCollaborativeChartMutation: (...args: unknown[]) => mockCommitCollab(...args),
+  checkSharedChartEditorAccess: (...args: unknown[]) => mockCheckEditorAccess(...args),
 }));
 
 vi.mock('@/config/firebase', () => ({
@@ -51,6 +53,7 @@ const sampleSharedChart: SharedChart = {
 describe('SharedChartPage (/share/:shareId)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCheckEditorAccess.mockResolvedValue(false);
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
@@ -109,10 +112,10 @@ describe('SharedChartPage (/share/:shareId)', () => {
     expect(screen.getByText('Chart Unavailable')).toBeInTheDocument();
   });
 
-  it('unlocks live collaborative editing when a signed-in user is in editorEmails while keeping anonymous viewers read-only', () => {
+  it('unlocks live collaborative editing via private sharedChartAccess without exposing editorEmails on public docs', async () => {
     const collabChart: SharedChart = {
       ...sampleSharedChart,
-      editorEmails: ['maya@example.com'],
+      hasEditors: true,
       lastEditedBy: {
         uid: 'owner-1',
         name: 'Alex Rivera',
@@ -126,6 +129,7 @@ describe('SharedChartPage (/share/:shareId)', () => {
         return vi.fn();
       },
     );
+    mockCheckEditorAccess.mockResolvedValue(true);
     mockCommitCollab.mockResolvedValue({ tasks: collabChart.tasks, nextId: 2, version: 2 });
 
     useAuthStore.setState({
@@ -150,14 +154,21 @@ describe('SharedChartPage (/share/:shareId)', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/Live · Editing/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Live · Editing/i)).toBeInTheDocument();
+    });
+    expect(mockCheckEditorAccess).toHaveBeenCalledWith('PubLink123456789', 'MAYA@example.com');
     expect(screen.getByRole('button', { name: /^New Task$/i })).toBeInTheDocument();
 
-    // Switch to Board view and move task status -> commits via atomic collaborative transaction
+    // Switch to Board view and move task status -> commits via atomic collaborative transaction without email PII
     fireEvent.click(screen.getByRole('tab', { name: /board/i }));
     fireEvent.change(screen.getByLabelText(/move typescript upgrade to status/i), {
       target: { value: 'completed' },
     });
-    expect(mockCommitCollab).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockCommitCollab).toHaveBeenCalledTimes(1);
+    });
+    const callArg = mockCommitCollab.mock.calls[0]?.[0] as { editor?: Record<string, unknown> };
+    expect(callArg?.editor).toEqual({ uid: 'editor-2', name: 'Maya Chen' });
   });
 });

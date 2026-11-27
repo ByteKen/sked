@@ -259,6 +259,27 @@ export function escapeTelegramHtml(input: string): string {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * Validates that a base app URL is a safe `https:` origin (or `http:` strictly for localhost)
+ * and strips any path/query/trailing slash so it cannot inject markup or unexpected destinations.
+ */
+export function sanitizeSafeAppUrl(raw?: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    const isHttps = parsed.protocol === 'https:';
+    const isLocalHttp =
+      parsed.protocol === 'http:' &&
+      (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1');
+    if (!isHttps && !isLocalHttp) return '';
+    return parsed.origin;
+  } catch {
+    return '';
+  }
+}
+
 function formatCountdownLabel(daysRemaining: number): string {
   if (daysRemaining < -1) return `🔴 ${Math.abs(daysRemaining)} days overdue`;
   if (daysRemaining === -1) return '🔴 Overdue (yesterday)';
@@ -305,12 +326,13 @@ export function formatTelegramReminderMessage(
     '',
   ];
 
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
 
   for (const [workspaceId, group] of grouped.entries()) {
     const safeTitle = escapeTelegramHtml(group.title);
     if (cleanBase) {
-      lines.push(`<b>📁 <a href="${cleanBase}/workspace/${workspaceId}">${safeTitle}</a></b>`);
+      const href = escapeTelegramHtml(`${cleanBase}/workspace/${encodeURIComponent(workspaceId)}`);
+      lines.push(`<b>📁 <a href="${href}">${safeTitle}</a></b>`);
     } else {
       lines.push(`<b>📁 ${safeTitle}</b>`);
     }

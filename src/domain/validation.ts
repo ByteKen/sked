@@ -152,8 +152,44 @@ function extractSyntaxErrorLine(input: string, message: string): number | null {
   return input.slice(0, position).split('\n').length;
 }
 
-function validateImportTaskNode(node: unknown, path: string): ImportValidationError[] {
+export const MAX_IMPORT_BYTES = 512 * 1024; // 512 KB cap (well within Firestore's 1 MiB doc limit)
+export const MAX_IMPORT_TASKS = 1000;
+export const MAX_IMPORT_DEPTH = 8;
+
+interface ImportValidationBudget {
+  taskCount: number;
+  limitExceeded: boolean;
+}
+
+function validateImportTaskNode(
+  node: unknown,
+  path: string,
+  depth: number,
+  budget: ImportValidationBudget,
+): ImportValidationError[] {
   const errors: ImportValidationError[] = [];
+  if (budget.limitExceeded) return errors;
+
+  budget.taskCount += 1;
+  if (budget.taskCount > MAX_IMPORT_TASKS) {
+    budget.limitExceeded = true;
+    errors.push({
+      type: 'structure',
+      path,
+      message: `Import exceeds maximum limit of ${MAX_IMPORT_TASKS.toLocaleString()} tasks`,
+    });
+    return errors;
+  }
+
+  if (depth > MAX_IMPORT_DEPTH) {
+    errors.push({
+      type: 'structure',
+      path,
+      message: `Task nesting exceeds maximum depth of ${MAX_IMPORT_DEPTH} levels`,
+    });
+    return errors;
+  }
+
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     errors.push({ type: 'validation', path, message: 'Task entry must be an object' });
     return errors;
@@ -258,7 +294,11 @@ function validateImportTaskNode(node: unknown, path: string): ImportValidationEr
       });
     } else {
       record.children.forEach((child, index) => {
-        errors.push(...validateImportTaskNode(child, `${path}.children[${index}]`));
+        if (!budget.limitExceeded) {
+          errors.push(
+            ...validateImportTaskNode(child, `${path}.children[${index}]`, depth + 1, budget),
+          );
+        }
       });
     }
   }
@@ -270,6 +310,19 @@ export function validateImportJson(rawInput: string): {
   errors: ImportValidationError[];
   tasks: ImportTaskInput[] | null;
 } {
+  const byteSize = new TextEncoder().encode(rawInput).length;
+  if (byteSize > MAX_IMPORT_BYTES) {
+    return {
+      errors: [
+        {
+          type: 'structure',
+          message: `JSON payload exceeds the ${Math.round(MAX_IMPORT_BYTES / 1024)} KB size limit`,
+        },
+      ],
+      tasks: null,
+    };
+  }
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawInput);
@@ -317,8 +370,11 @@ export function validateImportJson(rawInput: string): {
   }
 
   const errors: ImportValidationError[] = [];
+  const budget: ImportValidationBudget = { taskCount: 0, limitExceeded: false };
   root.tasks.forEach((task, index) => {
-    errors.push(...validateImportTaskNode(task, `tasks[${index}]`));
+    if (!budget.limitExceeded) {
+      errors.push(...validateImportTaskNode(task, `tasks[${index}]`, 0, budget));
+    }
   });
 
   if (errors.length > 0) {

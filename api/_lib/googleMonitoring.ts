@@ -4,6 +4,7 @@ import { getServiceAccountCredentials } from './firebaseAdmin.js';
 
 const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const MONITORING_READ_SCOPE = 'https://www.googleapis.com/auth/monitoring.read';
+const OUTBOUND_FETCH_TIMEOUT_MS = 8_000;
 
 let cachedToken: { accessToken: string; expiresAtMs: number } | null = null;
 
@@ -49,6 +50,7 @@ async function getMonitoringAccessToken(): Promise<{ accessToken: string; projec
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
+    signal: AbortSignal.timeout(OUTBOUND_FETCH_TIMEOUT_MS),
   });
 
   const json = (await resp.json().catch(() => ({}))) as {
@@ -116,6 +118,7 @@ async function queryTimeSeries(params: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
     },
+    signal: AbortSignal.timeout(OUTBOUND_FETCH_TIMEOUT_MS),
   });
 
   const data = (await resp.json().catch(() => ({}))) as MonitoringListResponse;

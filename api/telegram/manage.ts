@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { FieldValue } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import {
   DEFAULT_REMINDER_OFFSETS_LIST,
   escapeTelegramHtml,
@@ -17,6 +17,8 @@ import {
 import { sendTelegramMessage, setTelegramBotCommands } from '../_lib/telegramClient.js';
 
 const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
+const ACTION_COOLDOWN_MS = 30 * 1000;
+const VALID_TOKEN_PATTERN = /^[A-Za-z0-9_-]{12,64}$/;
 
 interface ManageBody {
   action?: 'create-link' | 'update-settings' | 'test' | 'disconnect';
@@ -59,9 +61,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        const token = randomBytes(18).toString('base64url');
         const now = Date.now();
-        const expiresAt = new Date(now + LINK_TOKEN_TTL_MS).toISOString();
+        const rateLimitRef = db.collection('telegramLinkTokens').doc(`__rate_${verifiedUser.uid}`);
+        const rateLimitSnap = await rateLimitRef.get();
+        const rateData = rateLimitSnap.exists
+          ? (rateLimitSnap.data() as { lastCreatedAtMs?: number; activeToken?: string })
+          : null;
+
+        if (
+          rateData &&
+          typeof rateData.lastCreatedAtMs === 'number' &&
+          now - rateData.lastCreatedAtMs < ACTION_COOLDOWN_MS
+        ) {
+          return res.status(429).json({
+            error: 'Please wait a moment before generating another Telegram connection link.',
+          });
+        }
+
+        if (
+          rateData?.activeToken &&
+          !rateData.activeToken.startsWith('__') &&
+          VALID_TOKEN_PATTERN.test(rateData.activeToken)
+        ) {
+          await db
+            .collection('telegramLinkTokens')
+            .doc(rateData.activeToken)
+            .delete()
+            .catch(() => {});
+        }
+
+        const token = randomBytes(18).toString('base64url');
+        const expiresAtMs = now + LINK_TOKEN_TTL_MS;
+        const expiresAt = new Date(expiresAtMs).toISOString();
+        const expiresAtTimestamp = Timestamp.fromMillis(expiresAtMs);
         const timezone = isValidTimeZone(body.timezone ?? '') ? body.timezone! : 'UTC';
         const reminderHour = clampHour(body.reminderHour, 9);
         const reminderOffsets = normalizeReminderOffsets(
@@ -69,16 +101,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         const includeOverdue = body.includeOverdue ?? true;
 
-        await db.collection('telegramLinkTokens').doc(token).set({
-          uid: verifiedUser.uid,
-          email: verifiedUser.email,
-          timezone,
-          reminderHour,
-          reminderOffsets,
-          includeOverdue,
-          createdAt: new Date(now).toISOString(),
-          expiresAtMs: now + LINK_TOKEN_TTL_MS,
-        });
+        await Promise.all([
+          db.collection('telegramLinkTokens').doc(token).set({
+            uid: verifiedUser.uid,
+            email: verifiedUser.email,
+            timezone,
+            reminderHour,
+            reminderOffsets,
+            includeOverdue,
+            createdAt: new Date(now).toISOString(),
+            expiresAtMs,
+            expiresAt: expiresAtTimestamp,
+          }),
+          rateLimitRef.set({
+            uid: verifiedUser.uid,
+            activeToken: token,
+            lastCreatedAtMs: now,
+            expiresAt: expiresAtTimestamp,
+          }),
+        ]);
 
         return res.status(200).json({
           ok: true,
@@ -144,11 +185,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(404).json({ error: 'Telegram is not connected yet.' });
         }
         const sub = subSnap.data() as StoredTelegramSubscription;
+        const nowMs = Date.now();
+        if (
+          typeof sub.lastTestSentAtMs === 'number' &&
+          nowMs - sub.lastTestSentAtMs < ACTION_COOLDOWN_MS
+        ) {
+          return res.status(429).json({
+            error: 'Please wait 30 seconds before sending another test notification.',
+          });
+        }
         const offsetsLabel = sub.reminderOffsets
           .map((d) => (d === 0 ? 'Due today' : `${d}d before`))
           .join(', ');
         const baseUrl = getAppBaseUrl(req);
-        const linkLine = baseUrl ? `\n<a href="${baseUrl}">Open Sked</a>` : '';
+        const linkLine = baseUrl ? `\n<a href="${escapeTelegramHtml(baseUrl)}">Open Sked</a>` : '';
 
         // Refresh Telegram slash-command menu for already-connected users
         void setTelegramBotCommands(BOT_COMMANDS);
@@ -180,10 +230,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(502).json({
             error: result.blocked
               ? 'You blocked this Telegram bot. Unblock it in Telegram and try again.'
-              : result.description || 'Could not deliver test message to Telegram.',
+              : 'Could not deliver test message to Telegram. Please try again later.',
           });
         }
 
+        await subRef.update({ lastTestSentAtMs: nowMs }).catch(() => {});
         return res.status(200).json({ ok: true });
       }
 
@@ -201,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('Telegram manage error:', err);
     return res.status(500).json({
-      error: err instanceof Error ? err.message : 'Internal server error',
+      error: 'An unexpected server error occurred. Please try again.',
     });
   }
 }

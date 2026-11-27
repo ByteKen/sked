@@ -16,7 +16,6 @@ export interface WorkspaceBaseline {
 export interface ChartEditorAttribution {
   uid: string;
   name: string;
-  email?: string;
   at: string;
 }
 
@@ -43,10 +42,23 @@ export interface SharedChart {
   tasks: Task[];
   nextId?: number;
   version?: number;
+  hasEditors?: boolean;
+  /** Legacy field hydrated only on pre-migration docs; never written to new public docs. */
   editorEmails?: string[];
   lastEditedBy?: ChartEditorAttribution | null;
   preferences: SharedChartViewPrefs;
   baseline?: WorkspaceBaseline | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SharedChartAccess {
+  shareId: string;
+  ownerId: string;
+  ownerName: string;
+  workspaceId: string;
+  title: string;
+  editorEmails: string[];
   createdAt: string;
   updatedAt: string;
 }

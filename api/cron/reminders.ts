@@ -133,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('Deadline reminders cron error:', err);
     return res.status(500).json({
-      error: err instanceof Error ? err.message : 'Cron execution failed',
+      error: 'Cron execution failed.',
     });
   }
 }

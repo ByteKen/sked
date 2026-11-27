@@ -115,8 +115,7 @@ function getCurrentEditorAttribution(): Omit<ChartEditorAttribution, 'at'> | nul
   if (!uid) return null;
   return {
     uid,
-    name: user?.name || authUser?.displayName || user?.email || authUser?.email || 'Owner',
-    email: user?.email || authUser?.email || undefined,
+    name: user?.name || authUser?.displayName || 'Owner',
   };
 }
 

@@ -26,7 +26,7 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { WorkspaceCard } from '@/components/workspace/WorkspaceCard';
-import { buildPortfolioFocusSummary, computeWorkspaceHealth, HEALTH_LABELS } from '@/domain/projectHealth';
+import { buildPortfolioFocusSummary } from '@/domain/projectHealth';
 import { TASK_STATUS_LABELS } from '@/domain/taskViews';
 import { formatISODate, getTodayLocal } from '@/domain/timeline';
 import { validateWorkspaceName } from '@/domain/validation';
@@ -35,7 +35,7 @@ import { userDocumentSync } from '@/services/userDocumentSync';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/store/toastStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
-import type { SharedChart, Task, TaskStatus, Workspace } from '@/types';
+import type { SharedChartAccess, Task, TaskStatus, Workspace } from '@/types';
 import { cn } from '@/utils/cn';
 import { FADE_UP_ITEM, STAGGER_CONTAINER } from '@/utils/motion';
 
@@ -79,7 +79,7 @@ export function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [sharedWithMe, setSharedWithMe] = useState<SharedChart[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedChartAccess[]>([]);
 
   // Subscribe to collaborative charts shared with this user's Google email ONLY while Home is open
   useEffect(() => {
@@ -585,99 +585,49 @@ export function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {sharedWithMe.map((chart) => {
-                const { summary: health } = computeWorkspaceHealth(
-                  {
-                    id: chart.workspaceId || chart.shareId,
-                    title: chart.title,
-                    createdAt: chart.createdAt,
-                    updatedAt: chart.updatedAt,
-                    baseline: chart.baseline,
-                  },
-                  chart.tasks,
-                  todayISO,
-                );
-
-                const healthBadgeClass =
-                  health.health === 'off-track'
-                    ? 'bg-rose-50 text-rose-700 border-rose-200/90 dark:bg-rose-500/20 dark:text-rose-300 dark:border-rose-500/35'
-                    : health.health === 'at-risk'
-                      ? 'bg-amber-50 text-amber-800 border-amber-200/90 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-400/35'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200/90 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/35';
-
-                return (
-                  <button
-                    key={chart.shareId}
-                    type="button"
-                    data-testid={`shared-with-me-${chart.shareId}`}
-                    onClick={() => navigate(`/share/${chart.shareId}`)}
-                    className="group flex flex-col justify-between rounded-2xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-surface-dark p-4 text-left hover:border-brand-400/80 hover:shadow-surface-md dark:hover:border-brand-400/50 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-400/30 text-[10px] font-semibold">
-                            <UsersThree weight="duotone" className="w-3 h-3" />
-                            Editor
-                          </span>
-                          {health.health !== 'empty' && (
-                            <span
-                              className={cn(
-                                'inline-flex items-center px-2 py-0.5 rounded-full border text-[10px] font-semibold',
-                                healthBadgeClass,
-                              )}
-                            >
-                              {HEALTH_LABELS[health.health]}
-                            </span>
-                          )}
-                        </div>
-                        <ArrowUpRight
-                          weight="bold"
-                          className="w-4 h-4 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
-                        />
-                      </div>
-
-                      <h3 className="text-base font-bold text-slate-900 dark:text-slate-50 truncate">
-                        {chart.title}
-                      </h3>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                        Shared by {chart.ownerName}
-                      </p>
-                      <p className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-                        <CalendarBlank className="w-3.5 h-3.5 shrink-0" weight="duotone" />
-                        Updated{' '}
-                        {new Date(chart.updatedAt || chart.createdAt).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </p>
+              {sharedWithMe.map((chart) => (
+                <button
+                  key={chart.shareId}
+                  type="button"
+                  data-testid={`shared-with-me-${chart.shareId}`}
+                  onClick={() => navigate(`/share/${chart.shareId}`)}
+                  className="group flex flex-col justify-between rounded-2xl border border-slate-200/90 dark:border-white/[0.08] bg-white dark:bg-surface-dark p-4 text-left hover:border-brand-400/80 hover:shadow-surface-md dark:hover:border-brand-400/50 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-400/30 text-[10px] font-semibold">
+                        <UsersThree weight="duotone" className="w-3 h-3" />
+                        Editor
+                      </span>
+                      <ArrowUpRight
+                        weight="bold"
+                        className="w-4 h-4 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400 shrink-0 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
+                      />
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/[0.06] space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-mono font-medium text-slate-600 dark:text-slate-300 tabular-nums">
-                          {health.totalTasks} {health.totalTasks === 1 ? 'task' : 'tasks'}
-                        </span>
-                        <span className="font-mono font-bold text-brand-600 dark:text-brand-400 tabular-nums">
-                          {health.completionPercent}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-slate-200/75 dark:bg-white/[0.07] overflow-hidden">
-                        <div
-                          style={{ width: `${health.completionPercent}%` }}
-                          className={cn(
-                            'h-full rounded-full',
-                            health.completionPercent === 100
-                              ? 'bg-emerald-500'
-                              : 'bg-brand-600 dark:bg-brand-500',
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
+                    <h3 className="text-base font-bold text-slate-900 dark:text-slate-50 truncate">
+                      {chart.title}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                      Shared by {chart.ownerName}
+                    </p>
+                    <p className="flex items-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                      <CalendarBlank className="w-3.5 h-3.5 shrink-0" weight="duotone" />
+                      Updated{' '}
+                      {new Date(chart.updatedAt || chart.createdAt).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-white/[0.06] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                    <span>Live collaborative workspace</span>
+                    <span className="font-semibold text-brand-600 dark:text-brand-400">Open</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </section>
         )}

@@ -6,39 +6,88 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    function isChartOwner() {
-      return request.auth != null && resource.data.ownerId == request.auth.uid;
-    }
-
-    function isChartEditor() {
+    function isVerifiedEmail() {
       return request.auth != null
              && request.auth.token.email != null
-             && resource.data.editorEmails is list
-             && request.auth.token.email.lower() in resource.data.editorEmails;
+             && request.auth.token.email_verified == true;
     }
 
-    // Invited editors may only mutate live schedule content, never ownership, title, prefs, or editor list
+    function isChartOwner() {
+      return request.auth != null
+             && resource != null
+             && resource.data.ownerId == request.auth.uid;
+    }
+
+    function isAccessEditor(accessData) {
+      return isVerifiedEmail()
+             && 'editorEmails' in accessData
+             && accessData.editorEmails is list
+             && request.auth.token.email.lower() in accessData.editorEmails;
+    }
+
+    function isChartEditor(shareId) {
+      return isVerifiedEmail()
+             && (
+               (exists(/databases/$(database)/documents/sharedChartAccess/$(shareId))
+                 && isAccessEditor(get(/databases/$(database)/documents/sharedChartAccess/$(shareId)).data))
+               || ('editorEmails' in resource.data
+                 && resource.data.editorEmails is list
+                 && request.auth.token.email.lower() in resource.data.editorEmails)
+             );
+    }
+
+    // Invited editors may only mutate live schedule content with validated types and non-spoofable attribution
     function onlyCollaborativeContentChanged() {
       return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['tasks', 'nextId', 'baseline', 'version', 'lastEditedBy', 'updatedAt'])
              && request.resource.data.ownerId == resource.data.ownerId
-             && request.resource.data.shareId == resource.data.shareId;
+             && request.resource.data.shareId == resource.data.shareId
+             && request.resource.data.tasks is list
+             && request.resource.data.nextId is int
+             && request.resource.data.nextId >= 1
+             && request.resource.data.version is int
+             && request.resource.data.version >= 1
+             && request.resource.data.updatedAt is string
+             && (!('baseline' in request.resource.data)
+                 || request.resource.data.baseline == null
+                 || request.resource.data.baseline is map)
+             && request.resource.data.lastEditedBy is map
+             && request.resource.data.lastEditedBy.keys().hasOnly(['uid', 'name', 'at'])
+             && request.resource.data.lastEditedBy.uid == request.auth.uid
+             && request.resource.data.lastEditedBy.name is string
+             && request.resource.data.lastEditedBy.at is string;
     }
 
-    // Shared Gantt charts:
-    // - Anyone with the exact shareId link can read (get)
-    // - Signed-in invited editors can list ONLY charts explicitly shared with their email ("Shared with me")
-    // - Owner has full write/delete; invited editors can update tasks/baseline collaboratively
+    // Private collaborator ACL documents (strictly owner + verified invited editors; never public)
+    match /sharedChartAccess/{shareId} {
+      allow get, list: if isChartOwner() || isAccessEditor(resource.data);
+      allow create: if request.auth != null
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.shareId == shareId
+                    && request.resource.data.editorEmails is list;
+      allow update: if isChartOwner()
+                    && request.resource.data.ownerId == resource.data.ownerId
+                    && request.resource.data.shareId == resource.data.shareId
+                    && request.resource.data.editorEmails is list;
+      allow delete: if isChartOwner();
+    }
+
+    // Shared Gantt charts (public read-only payload — contains ZERO collaborator email addresses):
+    // - Anyone with the exact unguessable shareId link can read (get)
+    // - Verified invited editors can still list legacy docs during transition to sharedChartAccess
+    // - Owner has full write/delete; verified invited editors can update tasks/baseline collaboratively
     match /sharedCharts/{shareId} {
       allow get: if true;
-      allow list: if request.auth != null
-                  && request.auth.token.email != null
+      allow list: if isVerifiedEmail()
+                  && 'editorEmails' in resource.data
                   && resource.data.editorEmails is list
                   && request.auth.token.email.lower() in resource.data.editorEmails;
       allow create: if request.auth != null
-                    && request.resource.data.ownerId == request.auth.uid;
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.shareId == shareId
+                    && request.resource.data.tasks is list;
       allow update: if isChartOwner()
-                    || (isChartEditor() && onlyCollaborativeContentChanged());
+                    || (isChartEditor(shareId) && onlyCollaborativeContentChanged());
       allow delete: if isChartOwner();
     }
 

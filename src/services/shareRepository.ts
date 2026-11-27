@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -22,6 +23,7 @@ import {
   DEFAULT_PREFERENCES,
   type ChartEditorAttribution,
   type SharedChart,
+  type SharedChartAccess,
   type SharedChartViewPrefs,
   type Task,
   type UserPreferences,
@@ -74,6 +76,16 @@ function hydrateSharedChart(shareId: string, raw: Partial<SharedChart>): SharedC
   const tasks = Array.isArray(raw.tasks)
     ? recalculateParentProgress(sanitizeTaskTree(raw.tasks))
     : [];
+  const legacyEditorEmails = normalizeEditorEmails(raw.editorEmails);
+  const lastEditedBy =
+    raw.lastEditedBy && typeof raw.lastEditedBy === 'object'
+      ? {
+          uid: raw.lastEditedBy.uid || '',
+          name: raw.lastEditedBy.name || 'Collaborator',
+          at: raw.lastEditedBy.at || '',
+        }
+      : null;
+
   return {
     shareId: raw.shareId || shareId,
     ownerId: raw.ownerId || '',
@@ -86,13 +98,60 @@ function hydrateSharedChart(shareId: string, raw: Partial<SharedChart>): SharedC
         ? Math.max(raw.nextId, getMaxTaskId(tasks) + 1)
         : getMaxTaskId(tasks) + 1,
     version: typeof raw.version === 'number' && Number.isFinite(raw.version) ? raw.version : 1,
-    editorEmails: normalizeEditorEmails(raw.editorEmails),
-    lastEditedBy: raw.lastEditedBy ?? null,
+    hasEditors: Boolean(raw.hasEditors || legacyEditorEmails.length > 0),
+    ...(legacyEditorEmails.length > 0 ? { editorEmails: legacyEditorEmails } : {}),
+    lastEditedBy,
     preferences: extractSharedViewPrefs(raw.preferences ?? {}),
     baseline: raw.baseline ?? null,
     createdAt: raw.createdAt || new Date().toISOString(),
     updatedAt: raw.updatedAt || new Date().toISOString(),
   };
+}
+
+function hydrateSharedChartAccess(
+  shareId: string,
+  raw: Partial<SharedChartAccess>,
+): SharedChartAccess {
+  return {
+    shareId: raw.shareId || shareId,
+    ownerId: raw.ownerId || '',
+    ownerName: raw.ownerName || 'Workspace Owner',
+    workspaceId: raw.workspaceId || '',
+    title: raw.title || 'Shared Project',
+    editorEmails: normalizeEditorEmails(raw.editorEmails),
+    createdAt: raw.createdAt || new Date().toISOString(),
+    updatedAt: raw.updatedAt || new Date().toISOString(),
+  };
+}
+
+function buildSharedChartAccessDoc(params: {
+  shareId: string;
+  ownerId: string;
+  ownerName: string;
+  workspaceId: string;
+  title: string;
+  editorEmails: string[];
+  createdAt: string;
+  updatedAt: string;
+}): SharedChartAccess {
+  return {
+    shareId: params.shareId,
+    ownerId: params.ownerId,
+    ownerName: params.ownerName,
+    workspaceId: params.workspaceId,
+    title: params.title,
+    editorEmails: params.editorEmails,
+    createdAt: params.createdAt,
+    updatedAt: params.updatedAt,
+  };
+}
+
+async function deleteAccessDocQuietly(shareId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, 'sharedChartAccess', shareId));
+  } catch {
+    // Non-existent ACL doc or already cleaned up
+  }
 }
 
 export interface EnableShareParams {
@@ -120,7 +179,7 @@ export async function enableWorkspaceShare(params: EnableShareParams): Promise<W
     tasks: sanitizedTasks,
     nextId: getMaxTaskId(sanitizedTasks) + 1,
     version: 1,
-    editorEmails,
+    hasEditors: editorEmails.length > 0,
     lastEditedBy: null,
     preferences: extractSharedViewPrefs(preferences),
     ...(workspace.baseline ? { baseline: workspace.baseline } : {}),
@@ -129,6 +188,22 @@ export async function enableWorkspaceShare(params: EnableShareParams): Promise<W
   };
 
   await setDoc(doc(db, 'sharedCharts', shareId), sharedDoc);
+
+  if (editorEmails.length > 0) {
+    await setDoc(
+      doc(db, 'sharedChartAccess', shareId),
+      buildSharedChartAccessDoc({
+        shareId,
+        ownerId: uid,
+        ownerName,
+        workspaceId: workspace.id,
+        title: workspace.title,
+        editorEmails,
+        createdAt: sharedDoc.createdAt,
+        updatedAt: now,
+      }),
+    );
+  }
 
   return updateWorkspaceInFirestore(uid, workspace, {
     shareId,
@@ -155,7 +230,7 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
     tasks: sanitizedTasks,
     nextId: getMaxTaskId(sanitizedTasks) + 1,
     version: 1,
-    editorEmails,
+    hasEditors: editorEmails.length > 0,
     lastEditedBy: null,
     preferences: extractSharedViewPrefs(preferences),
     ...(workspace.baseline ? { baseline: workspace.baseline } : {}),
@@ -163,8 +238,24 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
     updatedAt: now,
   };
 
-  // Write the new link first, update user metadata, then revoke the previous share doc
+  // Write the new link and private ACL first, update user metadata, then revoke the previous share docs
   await setDoc(doc(db, 'sharedCharts', nextShareId), sharedDoc);
+  if (editorEmails.length > 0) {
+    await setDoc(
+      doc(db, 'sharedChartAccess', nextShareId),
+      buildSharedChartAccessDoc({
+        shareId: nextShareId,
+        ownerId: uid,
+        ownerName,
+        workspaceId: workspace.id,
+        title: workspace.title,
+        editorEmails,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+  }
+
   const updatedWorkspace = await updateWorkspaceInFirestore(uid, workspace, {
     shareId: nextShareId,
     isShared: true,
@@ -173,11 +264,12 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
   });
 
   if (previousShareId && previousShareId !== nextShareId) {
-    try {
-      await deleteDoc(doc(db, 'sharedCharts', previousShareId));
-    } catch (err) {
-      console.warn('Could not delete previous share link document:', err);
-    }
+    await Promise.allSettled([
+      deleteDoc(doc(db, 'sharedCharts', previousShareId)).catch((err) => {
+        console.warn('Could not delete previous share link document:', err);
+      }),
+      deleteAccessDocQuietly(previousShareId),
+    ]);
   }
 
   return updatedWorkspace;
@@ -185,12 +277,13 @@ export async function regenerateWorkspaceShare(params: EnableShareParams): Promi
 
 /**
  * Updates invited collaborator emails for a workspace.
+ * Emails are stored exclusively in the private `sharedChartAccess/{shareId}` document (never on public `sharedCharts`).
  * Automatically enables sharing if the owner invites an editor before toggling the link on.
  */
 export async function updateWorkspaceEditorEmails(
   params: EnableShareParams & { editorEmails: readonly string[] },
 ): Promise<Workspace> {
-  const { uid, workspace } = params;
+  const { uid, ownerName, workspace } = params;
   const normalized = normalizeEditorEmails(params.editorEmails);
 
   if (!workspace.isShared || !workspace.shareId) {
@@ -200,9 +293,30 @@ export async function updateWorkspaceEditorEmails(
     return enableWorkspaceShare({ ...params, editorEmails: normalized });
   }
 
+  const now = new Date().toISOString();
+  if (normalized.length > 0) {
+    await setDoc(
+      doc(db, 'sharedChartAccess', workspace.shareId),
+      buildSharedChartAccessDoc({
+        shareId: workspace.shareId,
+        ownerId: uid,
+        ownerName,
+        workspaceId: workspace.id,
+        title: workspace.title,
+        editorEmails: normalized,
+        createdAt: workspace.sharedAt || now,
+        updatedAt: now,
+      }),
+    );
+  } else {
+    await deleteAccessDocQuietly(workspace.shareId);
+  }
+
+  // Scrub any legacy editorEmails array from the public chart doc and keep only a boolean flag
   await updateDoc(doc(db, 'sharedCharts', workspace.shareId), {
-    editorEmails: normalized,
-    updatedAt: new Date().toISOString(),
+    hasEditors: normalized.length > 0,
+    editorEmails: deleteField(),
+    updatedAt: now,
   });
 
   return updateWorkspaceInFirestore(uid, workspace, { editorEmails: normalized });
@@ -242,11 +356,12 @@ export async function disableWorkspaceShare(
   });
 
   if (shareIdToDelete) {
-    try {
-      await deleteDoc(doc(db, 'sharedCharts', shareIdToDelete));
-    } catch (err) {
-      console.warn('Could not delete disabled share document:', err);
-    }
+    await Promise.allSettled([
+      deleteDoc(doc(db, 'sharedCharts', shareIdToDelete)).catch((err) => {
+        console.warn('Could not delete disabled share document:', err);
+      }),
+      deleteAccessDocQuietly(shareIdToDelete),
+    ]);
   }
 
   return { workspace: updatedWorkspace, recoveredTasks };
@@ -254,11 +369,12 @@ export async function disableWorkspaceShare(
 
 export async function deleteOrphanedShareDoc(shareId: string | null | undefined): Promise<void> {
   if (!shareId) return;
-  try {
-    await deleteDoc(doc(db, 'sharedCharts', shareId));
-  } catch (err) {
-    console.warn('Failed to clean up shared chart document on workspace delete:', err);
-  }
+  await Promise.allSettled([
+    deleteDoc(doc(db, 'sharedCharts', shareId)).catch((err) => {
+      console.warn('Failed to clean up shared chart document on workspace delete:', err);
+    }),
+    deleteAccessDocQuietly(shareId),
+  ]);
 }
 
 export interface SharedChartSyncPatch {
@@ -268,7 +384,6 @@ export interface SharedChartSyncPatch {
   nextId?: number;
   preferences?: SharedChartViewPrefs;
   baseline?: WorkspaceBaseline | null;
-  editorEmails?: readonly string[];
 }
 
 /**
@@ -279,8 +394,9 @@ export async function syncSharedChart(
   shareId: string,
   patch: SharedChartSyncPatch,
 ): Promise<void> {
+  const now = new Date().toISOString();
   const payload: Record<string, unknown> = {
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
 
   if (patch.title !== undefined) {
@@ -300,14 +416,19 @@ export async function syncSharedChart(
   if (patch.baseline !== undefined) {
     payload.baseline = patch.baseline;
   }
-  if (patch.editorEmails !== undefined) {
-    payload.editorEmails = normalizeEditorEmails(patch.editorEmails);
-  }
 
   try {
     await updateDoc(doc(db, 'sharedCharts', shareId), payload);
   } catch (err) {
     console.warn('Live share sync skipped:', err);
+  }
+
+  // Keep private ACL card metadata in sync when workspace title or owner name changes
+  if (patch.title !== undefined || patch.ownerName !== undefined) {
+    const accessPatch: Record<string, unknown> = { updatedAt: now };
+    if (patch.title !== undefined) accessPatch.title = patch.title;
+    if (patch.ownerName !== undefined) accessPatch.ownerName = patch.ownerName;
+    await updateDoc(doc(db, 'sharedChartAccess', shareId), accessPatch).catch(() => {});
   }
 }
 
@@ -369,7 +490,6 @@ export async function commitCollaborativeChartMutation(params: {
     const attribution: ChartEditorAttribution = {
       uid: editor.uid,
       name: editor.name,
-      ...(editor.email ? { email: normalizeEmail(editor.email) } : {}),
       at: now,
     };
 
@@ -429,12 +549,32 @@ export function subscribeToSharedChart(
 }
 
 /**
- * Subscribes to all shared charts where the signed-in user's Google email is listed as an editor.
- * Uses a single-field array-contains query (1 read per shared workspace, zero composite index needed).
+ * Checks whether the signed-in user's email has editor access via the private
+ * `sharedChartAccess/{shareId}` ACL document. Returns false gracefully if unauthorized.
+ */
+export async function checkSharedChartEditorAccess(
+  shareId: string,
+  userEmail: string,
+): Promise<boolean> {
+  const normalized = normalizeEmail(userEmail);
+  if (!shareId || !normalized) return false;
+  try {
+    const snap = await getDoc(doc(db, 'sharedChartAccess', shareId));
+    if (!snap.exists()) return false;
+    const access = hydrateSharedChartAccess(shareId, snap.data() as Partial<SharedChartAccess>);
+    return access.editorEmails.includes(normalized);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Subscribes to all shared charts where the signed-in user's verified Google email is listed as
+ * an editor inside the private `sharedChartAccess` collection (never exposed on public docs).
  */
 export function subscribeToSharedWithMeCharts(
   userEmail: string,
-  onData: (charts: SharedChart[]) => void,
+  onData: (charts: SharedChartAccess[]) => void,
   onError?: (error: Error) => void,
 ): Unsubscribe {
   const normalized = normalizeEmail(userEmail);
@@ -444,16 +584,18 @@ export function subscribeToSharedWithMeCharts(
   }
 
   const q = query(
-    collection(db, 'sharedCharts'),
+    collection(db, 'sharedChartAccess'),
     where('editorEmails', 'array-contains', normalized),
   );
 
   return onSnapshot(
     q,
     (snapshot) => {
-      const charts: SharedChart[] = [];
+      const charts: SharedChartAccess[] = [];
       snapshot.forEach((docSnap) => {
-        charts.push(hydrateSharedChart(docSnap.id, docSnap.data() as Partial<SharedChart>));
+        charts.push(
+          hydrateSharedChartAccess(docSnap.id, docSnap.data() as Partial<SharedChartAccess>),
+        );
       });
       charts.sort(
         (a, b) =>

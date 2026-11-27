@@ -60,10 +60,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       storageSeries = bundle.storage;
     } catch (monitoringErr) {
       monitoringStatus = 'unavailable';
-      warning =
-        monitoringErr instanceof Error
-          ? monitoringErr.message
-          : 'Unable to reach Google Cloud Monitoring API.';
+      const rawMsg = monitoringErr instanceof Error ? monitoringErr.message : '';
+      warning = rawMsg.includes('permission denied')
+        ? 'Cloud Monitoring permission denied: ensure the Firebase Admin service account has the "Monitoring Viewer" IAM role.'
+        : 'Unable to reach Google Cloud Monitoring API right now.';
       console.error('Status endpoint Cloud Monitoring error:', monitoringErr);
     }
 
@@ -127,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (err) {
     console.error('System status handler error:', err);
     return res.status(500).json({
-      error: err instanceof Error ? err.message : 'Failed to load system status.',
+      error: 'Failed to load system status.',
     });
   }
 }

@@ -2,6 +2,7 @@ import type { VercelRequest } from '@vercel/node';
 import { cert, getApps, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { sanitizeSafeAppUrl } from '../../src/domain/reminders.js';
 import {
   recalculateBotTreeProgress,
   type TelegramWorkspaceBundle,
@@ -26,6 +27,7 @@ export interface StoredTelegramSubscription {
   includeOverdue: boolean;
   linkedAt: string;
   updatedAt: string;
+  lastTestSentAtMs?: number;
   sentReminders?: Record<string, string>;
 }
 
@@ -204,13 +206,25 @@ export async function saveWorkspaceTasksFromBot(
 }
 
 export function getAppBaseUrl(req?: VercelRequest): string {
-  const envUrl = process.env.APP_BASE_URL?.trim();
-  if (envUrl) return envUrl.replace(/\/+$/, '');
+  const candidates = [
+    process.env.APP_BASE_URL?.trim(),
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim(),
+    process.env.VERCEL_URL?.trim(),
+  ];
 
-  const host = req?.headers['x-forwarded-host'] || req?.headers.host;
-  const proto = req?.headers['x-forwarded-proto'] || 'https';
-  if (typeof host === 'string' && host) {
-    return `${Array.isArray(proto) ? proto[0] : proto}://${host}`;
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const withScheme = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+    const safe = sanitizeSafeAppUrl(withScheme);
+    if (safe) return safe;
   }
+
+  // Local dev fallback only — never trust spoofable forwarded host headers in production
+  const hostHeader = req?.headers.host;
+  const host = Array.isArray(hostHeader) ? hostHeader[0] : hostHeader;
+  if (typeof host === 'string' && /^(localhost|127\.0\.0\.1)(:\d{1,5})?$/i.test(host.trim())) {
+    return sanitizeSafeAppUrl(`http://${host.trim()}`);
+  }
+
   return '';
 }

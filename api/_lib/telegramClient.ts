@@ -8,6 +8,8 @@ export interface TelegramSendResult {
   description?: string;
 }
 
+const TELEGRAM_FETCH_TIMEOUT_MS = 8_000;
+
 async function callTelegramApi(
   method: string,
   payload: Record<string, unknown>,
@@ -25,6 +27,7 @@ async function callTelegramApi(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(TELEGRAM_FETCH_TIMEOUT_MS),
     });
 
     const data = (await response.json().catch(() => ({}))) as {

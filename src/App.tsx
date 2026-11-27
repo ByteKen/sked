@@ -9,6 +9,7 @@ import { LegalPage } from '@/pages/LegalPage';
 import { SharedChartPage } from '@/pages/SharedChartPage';
 import { StatusPage } from '@/pages/StatusPage';
 import { WorkspacePage } from '@/pages/WorkspacePage';
+import { sanitizeInternalRedirectPath } from '@/domain/navigation';
 import { userDocumentSync } from '@/services/userDocumentSync';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
@@ -60,9 +61,9 @@ function RootRoute() {
     return <LandingPage />;
   }
 
-  const redirect = searchParams.get('redirect');
-  if (redirect && redirect.startsWith('/') && redirect !== '/') {
-    return <Navigate to={redirect} replace />;
+  const safeRedirect = sanitizeInternalRedirectPath(searchParams.get('redirect'));
+  if (safeRedirect) {
+    return <Navigate to={safeRedirect} replace />;
   }
 
   if (workspaceLoading) {

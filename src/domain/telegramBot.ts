@@ -4,6 +4,7 @@ import {
   diffCalendarDaysISO,
   escapeTelegramHtml,
   formatTelegramUpcomingMessage,
+  sanitizeSafeAppUrl,
   type DueReminderItem,
   type WorkspaceTasksBundle,
 } from './reminders.js';
@@ -440,7 +441,10 @@ export function buildWorkspacesView(
   appBaseUrl?: string,
 ): BotViewPayload {
   if (workspaces.length === 0) {
-    const link = appBaseUrl ? `\n\n<a href="${appBaseUrl}">Open Sked</a> to create your first workspace.` : '';
+    const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
+    const link = cleanBase
+      ? `\n\n<a href="${escapeTelegramHtml(cleanBase)}">Open Sked</a> to create your first workspace.`
+      : '';
     return {
       text: `<b>📁 Your Workspaces</b>\n\nYou don't have any workspaces yet.${link}`,
     };
@@ -507,9 +511,9 @@ export function buildTaskListView(
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const page = Math.max(0, Math.min(rawPage, totalPages - 1));
   const slice = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
   const titleHtml = cleanBase
-    ? `<a href="${cleanBase}/workspace/${workspace.workspaceId}">${escapeTelegramHtml(workspace.workspaceTitle)}</a>`
+    ? `<a href="${escapeTelegramHtml(`${cleanBase}/workspace/${encodeURIComponent(workspace.workspaceId)}`)}">${escapeTelegramHtml(workspace.workspaceTitle)}</a>`
     : escapeTelegramHtml(workspace.workspaceTitle);
 
   const filterLabel = filter === 'active' ? 'Active' : filter === 'done' ? 'Completed' : 'All';
@@ -680,11 +684,11 @@ export function buildTaskDetailView(
       callback_data: encodeCallback(`ws:${workspace.workspaceId}:${fCode}:${page}`),
     },
   ];
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
   if (cleanBase) {
     navRow.push({
       text: '🌐 Open in Sked',
-      url: `${cleanBase}/workspace/${workspace.workspaceId}`,
+      url: `${cleanBase}/workspace/${encodeURIComponent(workspace.workspaceId)}`,
     });
   }
   rows.push(navRow);
@@ -701,7 +705,7 @@ export function buildTodayView(
   appBaseUrl?: string,
 ): BotViewPayload {
   const urgentItems = collectUpcomingDeadlines(workspaces, todayISO, 0);
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
 
   if (urgentItems.length === 0) {
     return {
@@ -729,7 +733,7 @@ export function buildTodayView(
   for (const item of urgentItems.slice(0, 12)) {
     const tag = item.daysRemaining < 0 ? `🔴 ${Math.abs(item.daysRemaining)}d overdue` : '🔥 Due today';
     const wsLink = cleanBase
-      ? `<a href="${cleanBase}/workspace/${item.workspaceId}">${escapeTelegramHtml(item.workspaceTitle)}</a>`
+      ? `<a href="${escapeTelegramHtml(`${cleanBase}/workspace/${encodeURIComponent(item.workspaceId)}`)}">${escapeTelegramHtml(item.workspaceTitle)}</a>`
       : escapeTelegramHtml(item.workspaceTitle);
     lines.push(
       `• ${tag} — <b>${escapeTelegramHtml(item.taskName)}</b> (${wsLink})`,
@@ -841,7 +845,7 @@ export function buildSummaryView(
     ],
   ];
 
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
   if (cleanBase) {
     rows.push([{ text: '🌐 Open Sked', url: cleanBase }]);
   }
@@ -870,7 +874,7 @@ export function buildReminderAlertReplyMarkup(
     { text: '📋 Browse Tasks', callback_data: 'wl' },
     { text: '📅 Today', callback_data: 'to' },
   ];
-  const cleanBase = appBaseUrl?.replace(/\/+$/, '');
+  const cleanBase = sanitizeSafeAppUrl(appBaseUrl);
   if (cleanBase) {
     footer.push({ text: '🌐 Open Sked', url: cleanBase });
   }

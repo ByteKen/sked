@@ -13,7 +13,11 @@ import {
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { validateImportJson, type ImportValidationError } from '@/domain/validation';
+import {
+  MAX_IMPORT_BYTES,
+  validateImportJson,
+  type ImportValidationError,
+} from '@/domain/validation';
 import { toast } from '@/store/toastStore';
 import type { ImportTaskInput } from '@/types';
 import { cn } from '@/utils/cn';
@@ -134,6 +138,19 @@ export function ImportModal({ isOpen, onImport, onClose }: ImportModalProps) {
   const handleFileUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (file.size > MAX_IMPORT_BYTES) {
+      const maxKb = Math.round(MAX_IMPORT_BYTES / 1024);
+      toast.error('File too large', `JSON imports must be ${maxKb} KB or smaller.`);
+      setErrors([
+        {
+          type: 'structure',
+          message: `Uploaded file exceeds the ${maxKb} KB size limit`,
+        },
+      ]);
+      setParsedTasks(null);
+      event.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {

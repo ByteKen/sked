@@ -9,6 +9,7 @@ import {
   getLocalDatePartsInTimezone,
   normalizeReminderOffsets,
   pruneSentReminders,
+  sanitizeSafeAppUrl,
   type WorkspaceTasksBundle,
 } from '@/domain/reminders';
 
@@ -128,6 +129,18 @@ describe('deadline reminders domain engine', () => {
     expect(html).toContain('Publish Firestore Rules');
     expect(html).toContain('sharedCharts &amp; telegramSubscriptions');
     expect(escapeTelegramHtml('<script>"&')).toBe('&lt;script&gt;&quot;&amp;');
+
+    // Unsafe schemes and spoofed URLs are stripped cleanly before HTML interpolation
+    expect(sanitizeSafeAppUrl('https://skedspace.vercel.app/extra?x=1')).toBe(
+      'https://skedspace.vercel.app',
+    );
+    expect(sanitizeSafeAppUrl('http://localhost:5173/test')).toBe('http://localhost:5173');
+    expect(sanitizeSafeAppUrl('http://evil.example.com')).toBe('');
+    expect(sanitizeSafeAppUrl('javascript:alert(1)')).toBe('');
+    expect(sanitizeSafeAppUrl('https://evil.com" onclick="x')).toBe('');
+
+    const noUnsafeLink = formatTelegramReminderMessage(due, 'javascript:alert(1)');
+    expect(noUnsafeLink).not.toContain('<a href=');
   });
 
   it('normalizes offsets, lists upcoming tasks, and prunes stale dedupe keys', () => {
