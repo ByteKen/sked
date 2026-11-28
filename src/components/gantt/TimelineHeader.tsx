@@ -17,11 +17,20 @@ export const TimelineHeader = memo(function TimelineHeader({
   showMonthMarkers,
   highlightWeekends = true,
 }: TimelineHeaderProps) {
+  const lastCol = columns[columns.length - 1];
+  const totalWidth = lastCol ? lastCol.leftPx + lastCol.widthPx : 0;
+  const clampedTodayPillLeft =
+    todayOffsetPx !== null
+      ? totalWidth > 48
+        ? Math.min(Math.max(todayOffsetPx, 24), totalWidth - 24)
+        : todayOffsetPx
+      : null;
+
   return (
     <div
       style={{ height: headerHeight }}
       className={cn(
-        'sticky top-0 z-30 flex relative select-none',
+        'sticky top-0 z-30 flex select-none overflow-hidden',
         'bg-[#F4F6FA] dark:bg-[#10131C]',
         'border-b border-slate-200/90 dark:border-white/[0.08]',
         'shadow-[0_2px_10px_-3px_rgba(9,11,16,0.1)] dark:shadow-[0_3px_12px_-3px_rgba(0,0,0,0.65)]',
@@ -41,6 +50,7 @@ export const TimelineHeader = memo(function TimelineHeader({
             style={{ width: `${col.widthPx}px`, height: headerHeight }}
             className={cn(
               'shrink-0 relative flex flex-col items-center justify-center border-r border-slate-200/90 dark:border-white/[0.06] px-0.5',
+              todayOffsetPx !== null && 'pb-3.5',
               col.isCurrent
                 ? 'bg-brand-100/80 dark:bg-brand-500/18'
                 : highlightWeekends && col.isWeekend
@@ -55,7 +65,7 @@ export const TimelineHeader = memo(function TimelineHeader({
             )}
             <span
               className={cn(
-                'text-[11px] font-semibold tracking-wide leading-tight',
+                'text-[11px] font-semibold tracking-wide leading-none',
                 isNewMonth && 'mt-1.5',
                 col.isCurrent
                   ? 'text-brand-700 dark:text-brand-200'
@@ -69,7 +79,7 @@ export const TimelineHeader = memo(function TimelineHeader({
             {col.subLabel && (
               <span
                 className={cn(
-                  'font-mono text-[10px] leading-tight mt-0.5 tabular-nums',
+                  'font-mono text-[10px] leading-none mt-1 tabular-nums',
                   col.isCurrent
                     ? 'text-brand-700 dark:text-white font-bold'
                     : 'text-slate-500 dark:text-slate-400',
@@ -82,13 +92,13 @@ export const TimelineHeader = memo(function TimelineHeader({
         );
       })}
 
-      {/* Today indicator cleanly contained inside the opaque header */}
-      {todayOffsetPx !== null && (
+      {/* Today indicator cleanly seated inside the header's reserved bottom strip */}
+      {clampedTodayPillLeft !== null && (
         <div
-          style={{ left: `${todayOffsetPx}px` }}
-          className="pointer-events-none absolute bottom-0.5 -translate-x-1/2 z-40"
+          style={{ left: `${clampedTodayPillLeft}px` }}
+          className="pointer-events-none absolute bottom-[2px] -translate-x-1/2 z-40 flex items-center"
         >
-          <span className="inline-flex items-center px-1.5 py-[1px] rounded-full text-[8px] font-bold uppercase tracking-wider bg-brand-600 dark:bg-brand-500 text-white shadow-sm">
+          <span className="inline-flex items-center h-[13px] px-1.5 rounded-full text-[8px] font-bold leading-none uppercase tracking-wider bg-brand-600 dark:bg-brand-500 text-white shadow-sm">
             Today
           </span>
         </div>

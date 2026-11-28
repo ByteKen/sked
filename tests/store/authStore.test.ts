@@ -9,10 +9,12 @@ const {
   mockDeleteUserAccountData,
   mockSaveDisplayNameInFirestore,
   mockSyncOwnerNameAcrossSharedCharts,
+  mockStartSync,
   mockStopSync,
   mockGetLatestSnapshot,
   mockUnsubscribe,
   mockAuth,
+  mockPopupRedirectResolver,
 } = vi.hoisted(() => ({
   mockSignInWithPopup: vi.fn(),
   mockSignOut: vi.fn(),
@@ -22,10 +24,12 @@ const {
   mockDeleteUserAccountData: vi.fn(),
   mockSaveDisplayNameInFirestore: vi.fn().mockResolvedValue(undefined),
   mockSyncOwnerNameAcrossSharedCharts: vi.fn().mockResolvedValue(undefined),
+  mockStartSync: vi.fn(),
   mockStopSync: vi.fn(),
   mockGetLatestSnapshot: vi.fn<() => { data?: Record<string, unknown> } | null>(() => null),
   mockUnsubscribe: vi.fn(),
   mockAuth: { currentUser: null as unknown },
+  mockPopupRedirectResolver: { type: 'popupRedirectResolver' },
 }));
 let authCallback: ((user: unknown) => void) | null = null;
 
@@ -48,6 +52,7 @@ vi.mock('firebase/auth', () => ({
 vi.mock('@/config/firebase', () => ({
   auth: mockAuth,
   googleProvider: {},
+  popupRedirectResolver: mockPopupRedirectResolver,
   db: {},
 }));
 
@@ -63,6 +68,7 @@ vi.mock('@/services/shareRepository', () => ({
 
 vi.mock('@/services/userDocumentSync', () => ({
   userDocumentSync: {
+    start: (...args: unknown[]) => mockStartSync(...args),
     stop: (...args: unknown[]) => mockStopSync(...args),
     getLatestSnapshot: () => mockGetLatestSnapshot(),
   },
@@ -149,7 +155,11 @@ describe('authStore (open access & safe account deletion)', () => {
     const result = await useAuthStore.getState().deleteAccount();
 
     expect(result).toEqual({ ok: true });
-    expect(mockReauthenticateWithPopup).toHaveBeenCalledWith(fakeUser, {});
+    expect(mockReauthenticateWithPopup).toHaveBeenCalledWith(
+      fakeUser,
+      {},
+      mockPopupRedirectResolver,
+    );
     expect(mockStopSync).toHaveBeenCalledTimes(1);
     expect(mockDeleteUserAccountData).toHaveBeenCalledWith('uid-delete-1');
     expect(mockDeleteUser).toHaveBeenCalledWith(fakeUser);
@@ -236,17 +246,29 @@ describe('authStore (open access & safe account deletion)', () => {
     expect(useAuthStore.getState().hasSessionHint).toBe(false);
     expect(localStorage.getItem('sked_session_hint')).toBeNull();
 
-    // Interactive login sets signingIn=true while keeping authChecked=true so LandingPage stays mounted
+    // Interactive login sets signingIn=true while keeping authChecked=true so LandingPage stays mounted,
+    // and immediately hydrates auth state + starts userDocumentSync on popup resolution.
     mockSignInWithPopup.mockImplementationOnce(async () => {
       expect(useAuthStore.getState().signingIn).toBe(true);
       expect(useAuthStore.getState().loading).toBe(false);
       expect(useAuthStore.getState().authChecked).toBe(true);
-      return { user: { uid: 'uid-hint', email: 'hint@example.com' } };
+      return {
+        user: {
+          uid: 'uid-hint',
+          email: 'hint@example.com',
+          displayName: 'Hint User',
+          photoURL: null,
+        },
+      };
     });
     await useAuthStore.getState().login();
     expect(useAuthStore.getState().signingIn).toBe(false);
+    expect(useAuthStore.getState().isAuthenticated).toBe(true);
+    expect(useAuthStore.getState().hasSessionHint).toBe(true);
+    expect(localStorage.getItem('sked_session_hint')).toBe('1');
+    expect(mockStartSync).toHaveBeenCalledWith('uid-hint');
 
-    // Auth state fires with signed-in user -> writes non-sensitive session hint
+    // Auth state fires with signed-in user -> keeps session hint persisted
     authCallback?.({
       uid: 'uid-hint',
       email: 'hint@example.com',

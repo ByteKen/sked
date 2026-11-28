@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { auth, googleProvider } from '@/config/firebase';
+import { auth, googleProvider, popupRedirectResolver } from '@/config/firebase';
 import { validateDisplayName } from '@/domain/validation';
 import { syncOwnerNameAcrossSharedCharts } from '@/services/shareRepository';
 import { disconnectTelegram } from '@/services/telegramService';
@@ -34,7 +34,21 @@ const SESSION_HINT_STORAGE_KEY = 'sked_session_hint';
 
 function readSessionHint(): boolean {
   try {
-    return typeof localStorage !== 'undefined' && localStorage.getItem(SESSION_HINT_STORAGE_KEY) === '1';
+    if (typeof localStorage === 'undefined') return false;
+    if (localStorage.getItem(SESSION_HINT_STORAGE_KEY) === '1') {
+      return true;
+    }
+    // Secondary fallback if Firebase persisted a user entry in browserLocalPersistence
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('firebase:authUser:')) {
+        const value = localStorage.getItem(key);
+        if (value && value !== 'null' && value !== '{}') {
+          return true;
+        }
+      }
+    }
+    return false;
   } catch {
     return false;
   }
@@ -104,6 +118,8 @@ export const useAuthStore = create<AuthStoreState>()(
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
           writeSessionHint(true);
+          // Start Firestore user document stream immediately before React schedules effects
+          userDocumentSync.start(firebaseUser.uid);
           set({
             user: mapFirebaseUser(firebaseUser),
             isAuthenticated: true,
@@ -135,9 +151,22 @@ export const useAuthStore = create<AuthStoreState>()(
       set({ error: null, cancelled: false, signingIn: true });
 
       try {
-        const result = await signInWithPopup(auth, googleProvider);
+        const result = await signInWithPopup(auth, googleProvider, popupRedirectResolver);
         if (attemptId === activeLoginAttemptId) {
-          set({ signingIn: false });
+          // Immediately transition out of LandingPage and start Firestore sync without
+          // waiting for an extra asynchronous onAuthStateChanged + useEffect roundtrip.
+          writeSessionHint(true);
+          userDocumentSync.start(result.user.uid);
+          set({
+            user: mapFirebaseUser(result.user),
+            isAuthenticated: true,
+            loading: false,
+            signingIn: false,
+            authChecked: true,
+            hasSessionHint: true,
+            error: null,
+            cancelled: false,
+          });
         }
         return result.user;
       } catch (err: unknown) {
@@ -253,7 +282,7 @@ export const useAuthStore = create<AuthStoreState>()(
 
       // Step 1: Always re-verify identity FIRST before modifying any Firestore data
       try {
-        await reauthenticateWithPopup(currentUser, googleProvider);
+        await reauthenticateWithPopup(currentUser, googleProvider, popupRedirectResolver);
       } catch (err: unknown) {
         const firebaseErr = err as { code?: string };
         if (

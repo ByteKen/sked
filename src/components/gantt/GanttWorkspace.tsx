@@ -440,7 +440,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       () => columns.reduce((acc, col) => acc + col.widthPx, 0),
       [columns],
     );
-    const totalHeight = Math.max(visibleTasks.length * rowHeight, 120);
+    const totalHeight = visibleTasks.length > 0 ? visibleTasks.length * rowHeight : 120;
 
     const todayOffsetPx = useMemo(() => {
       const today = getTodayLocal();

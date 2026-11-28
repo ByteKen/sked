@@ -145,11 +145,11 @@ export const TimelineGrid = memo(function TimelineGrid({
         />
       )}
 
-      {/* Vertical Today line (strictly below sticky z-30 header) */}
+      {/* Vertical Today line (centered on todayOffsetPx, strictly below sticky z-30 header) */}
       {todayOffsetPx !== null && (
         <div
           aria-hidden="true"
-          style={{ left: `${todayOffsetPx}px` }}
+          style={{ left: `${Math.max(0, todayOffsetPx - 1)}px` }}
           className="pointer-events-none absolute top-0 bottom-0 z-[15] w-[2px] bg-brand-500/85 dark:bg-brand-400/85"
         />
       )}
