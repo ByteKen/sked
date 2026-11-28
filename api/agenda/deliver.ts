@@ -1,7 +1,15 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
-import { formatAgendaTelegramMessage, sanitizeAgendaItems } from '../../src/domain/agenda.js';
+import {
+  computeNextAgendaReminder,
+  formatAgendaTelegramMessage,
+  isAgendaOccurrenceDone,
+  isRepeatingAgendaItem,
+  resolveOccurrenceDateForAlert,
+  sanitizeAgendaItems,
+} from '../../src/domain/agenda.js';
+import { scheduleAgendaCloudTask } from '../_lib/cloudTasks.js';
 import {
   getAdminDb,
   getAppBaseUrl,
@@ -32,6 +40,7 @@ function isAuthorizedTaskCallback(req: VercelRequest): boolean {
 /**
  * One-shot webhook invoked exclusively by Google Cloud Tasks at the exact scheduled
  * reminder timestamp for a single personal agenda item (zero polling).
+ * For repeating items, immediately self-chains the next occurrence's Cloud Task after delivery.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -74,8 +83,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const items = sanitizeAgendaItems(userSnap.data()?.agendaItems);
     const target = items.find((entry) => entry.id === itemId);
 
-    if (!target || target.isDone || target.reminderSentAt || target.reminderOffsetMinutes === null) {
+    if (!target || target.reminderOffsetMinutes === null) {
       return res.status(200).json({ ok: true, skipped: 'already-handled' });
+    }
+
+    const repeating = isRepeatingAgendaItem(target);
+    const occurrenceDate = resolveOccurrenceDateForAlert(target, expectedTargetISO || target.reminderTargetISO);
+
+    if (!repeating && (target.isDone || target.reminderSentAt)) {
+      return res.status(200).json({ ok: true, skipped: 'already-handled' });
+    }
+    if (repeating && isAgendaOccurrenceDone(target, occurrenceDate)) {
+      return res.status(200).json({ ok: true, skipped: 'occurrence-already-done' });
     }
 
     // Idempotency guard: if the user rescheduled this item after this Cloud Task was queued, ignore stale task
@@ -84,25 +103,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const baseUrl = getAppBaseUrl(req);
-    const text = formatAgendaTelegramMessage(target, baseUrl);
+    const text = formatAgendaTelegramMessage(target, baseUrl, occurrenceDate);
+    const doneCallback = repeating ? `agd:${target.id}:${occurrenceDate}` : `agd:${target.id}`;
     const sendResult = await sendTelegramMessage(sub.chatId, text, {
       inline_keyboard: [
         [
-          { text: '✅ Mark Done', callback_data: `agd:${target.id}` },
+          { text: '✅ Mark Done', callback_data: doneCallback },
           { text: '📅 Today', callback_data: 'to' },
         ],
       ],
     });
 
-    const nowISO = new Date().toISOString();
+    const nowMs = Date.now();
+    const nowISO = new Date(nowMs).toISOString();
 
     if (sendResult.ok) {
+      let nextReminderTargetISO: string | null = target.reminderTargetISO ?? null;
+      let nextCloudTaskName: string | null = null;
+      let nextReminderSentAt: string | null = nowISO;
+
+      if (repeating) {
+        const deliveredMs = Date.parse(expectedTargetISO || target.reminderTargetISO || nowISO);
+        const minNextAlertMs = Math.max(nowMs, Number.isNaN(deliveredMs) ? nowMs : deliveredMs) + 60_000;
+        const chained = computeNextAgendaReminder({
+          date: target.date,
+          time: target.time,
+          recurrence: target.recurrence,
+          recurrenceEndDate: target.recurrenceEndDate,
+          completedDates: target.completedDates,
+          reminderOffsetMinutes: target.reminderOffsetMinutes,
+          timezone: target.timezone,
+          defaultReminderHour: sub.reminderHour ?? 9,
+          nowMs,
+          minAlertUtcMs: minNextAlertMs,
+        });
+
+        nextReminderTargetISO = chained?.reminderTargetISO ?? null;
+        if (nextReminderTargetISO) {
+          const scheduled = await scheduleAgendaCloudTask({
+            uid,
+            itemId: target.id,
+            reminderTargetISO: nextReminderTargetISO,
+            baseUrl,
+          });
+          nextCloudTaskName = scheduled.taskName;
+          // Clear reminderSentAt while future repeats remain pending so daily cron can pick up >29d items
+          nextReminderSentAt = null;
+        }
+      }
+
       const nextItems = items.map((entry) =>
         entry.id === target.id
           ? {
               ...entry,
-              cloudTaskName: null,
-              reminderSentAt: nowISO,
+              reminderTargetISO: nextReminderTargetISO,
+              cloudTaskName: nextCloudTaskName,
+              reminderSentAt: nextReminderSentAt,
               updatedAt: nowISO,
             }
           : entry,
@@ -116,7 +172,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { merge: true },
       );
 
-      return res.status(200).json({ ok: true, delivered: true });
+      return res.status(200).json({
+        ok: true,
+        delivered: true,
+        ...(repeating ? { nextReminderTargetISO, chainedTask: Boolean(nextCloudTaskName) } : {}),
+      });
     }
 
     if (sendResult.blocked) {

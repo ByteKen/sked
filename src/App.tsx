@@ -2,7 +2,11 @@ import { useEffect, type ReactNode } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
 import { AgendaReminderBanner } from '@/components/calendar/AgendaReminderBanner';
-import { BrandLogo } from '@/components/ui/BrandLogo';
+import {
+  HomePageSkeleton,
+  StatusFullPageSkeleton,
+  WorkspacePageSkeleton,
+} from '@/components/skeletons/PageSkeletons';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { HomePage } from '@/pages/HomePage';
 import { LandingPage } from '@/pages/LandingPage';
@@ -17,28 +21,24 @@ import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 
-function LoadingScreen() {
-  return (
-    <div className="min-h-screen flex items-center justify-center studio-atmosphere">
-      <div className="text-center">
-        <div className="inline-flex justify-center mb-4 animate-pulse">
-          <BrandLogo size="lg" glow />
-        </div>
-        <p className="font-mono text-xs uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
-          Loading workspace...
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function ProtectedRoute({ children }: { children: ReactNode }) {
+function ProtectedRoute({
+  children,
+  loadingFallback,
+  waitForWorkspaces = false,
+}: {
+  children: ReactNode;
+  loadingFallback: ReactNode;
+  waitForWorkspaces?: boolean;
+}) {
+  const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const loading = useAuthStore((s) => s.loading);
+  const authChecked = useAuthStore((s) => s.authChecked);
+  const workspacesLoading = useWorkspaceStore((s) => s.loading);
+  const workspacesLoadedForUid = useWorkspaceStore((s) => s.loadedForUid);
   const location = useLocation();
 
-  if (loading) {
-    return <LoadingScreen />;
+  if (!authChecked) {
+    return <>{loadingFallback}</>;
   }
 
   if (!isAuthenticated) {
@@ -46,17 +46,25 @@ function ProtectedRoute({ children }: { children: ReactNode }) {
     return <Navigate to={`/?redirect=${redirect}`} replace />;
   }
 
+  if (waitForWorkspaces && (workspacesLoading || workspacesLoadedForUid !== user?.id)) {
+    return <>{loadingFallback}</>;
+  }
+
   return <>{children}</>;
 }
 
 function RootRoute() {
+  const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const authLoading = useAuthStore((s) => s.loading);
-  const workspaceLoading = useWorkspaceStore((s) => s.loading);
+  const authChecked = useAuthStore((s) => s.authChecked);
+  const hasSessionHint = useAuthStore((s) => s.hasSessionHint);
+  const workspacesLoading = useWorkspaceStore((s) => s.loading);
+  const workspacesLoadedForUid = useWorkspaceStore((s) => s.loadedForUid);
   const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'calendar' ? 'calendar' : 'workspaces';
 
-  if (authLoading) {
-    return <LoadingScreen />;
+  if (!authChecked) {
+    return hasSessionHint ? <HomePageSkeleton tab={initialTab} /> : <LandingPage />;
   }
 
   if (!isAuthenticated) {
@@ -68,8 +76,8 @@ function RootRoute() {
     return <Navigate to={safeRedirect} replace />;
   }
 
-  if (workspaceLoading) {
-    return <LoadingScreen />;
+  if (workspacesLoading || workspacesLoadedForUid !== user?.id) {
+    return <HomePageSkeleton tab={initialTab} />;
   }
 
   return <HomePage />;
@@ -88,6 +96,7 @@ export default function App() {
   const cleanupWorkspaces = useWorkspaceStore((s) => s.cleanup);
   const initPreferences = usePreferencesStore((s) => s.initPreferences);
   const cleanupPreferences = usePreferencesStore((s) => s.cleanup);
+  const enableAnimations = usePreferencesStore((s) => s.enableAnimations);
   const initAgenda = useAgendaStore((s) => s.initAgenda);
   const cleanupAgenda = useAgendaStore((s) => s.cleanup);
 
@@ -128,7 +137,7 @@ export default function App() {
   ]);
 
   return (
-    <MotionConfig reducedMotion="user">
+    <MotionConfig reducedMotion={enableAnimations ? 'user' : 'always'}>
       <Routes>
         <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<LegacyLoginRedirect />} />
@@ -138,7 +147,7 @@ export default function App() {
         <Route
           path="/status"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute loadingFallback={<StatusFullPageSkeleton />}>
               <StatusPage />
             </ProtectedRoute>
           }
@@ -146,7 +155,10 @@ export default function App() {
         <Route
           path="/workspace/:workspaceId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute
+              waitForWorkspaces
+              loadingFallback={<WorkspacePageSkeleton variant="workspace" />}
+            >
               <WorkspacePage />
             </ProtectedRoute>
           }

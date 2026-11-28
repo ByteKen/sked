@@ -3,7 +3,6 @@ import {
   Check,
   GlobeHemisphereWest,
   Trash,
-  UserCircle,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/Button';
@@ -65,42 +64,55 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
 
   return (
     <div className="space-y-6">
-      {/* Live Profile & Shared Attribution Preview */}
-      <section className="space-y-3">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-          Public Identity
-        </h3>
-
-        <div className="p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025] space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-white/[0.07]">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="w-12 h-12 rounded-2xl bg-brand-50 dark:bg-brand-500/20 border border-brand-200/90 dark:border-brand-400/30 text-brand-700 dark:text-brand-300 text-lg font-bold flex items-center justify-center shrink-0">
+      {/* Public Identity Rows */}
+      <section>
+        <div className="divide-y divide-slate-100 dark:divide-white/[0.06]">
+          {/* Avatar & Live Shared Attribution Preview */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3.5 first:pt-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-brand-50 dark:bg-brand-500/20 border border-brand-200/80 dark:border-brand-400/30 text-brand-700 dark:text-brand-300 text-sm font-bold flex items-center justify-center shrink-0">
                 {avatarInitial}
               </div>
               <div className="min-w-0">
-                <p className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                <p className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 truncate">
                   {previewName}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  Public workspace profile
+                </p>
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-brand-200/80 dark:border-brand-400/25 bg-white dark:bg-surface-dark text-xs text-slate-600 dark:text-slate-300 self-start sm:self-center max-w-full">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-200/80 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.03] text-[11px] text-slate-600 dark:text-slate-300 self-start sm:self-center max-w-full">
               <GlobeHemisphereWest
                 weight="duotone"
-                className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0"
+                className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400 shrink-0"
               />
               <span className="truncate">
-                Shared by <strong className="font-semibold text-slate-900 dark:text-white">{previewName}</strong>
+                Shared by{' '}
+                <strong className="font-semibold text-slate-900 dark:text-white">
+                  {previewName}
+                </strong>
               </span>
             </div>
           </div>
 
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
+          {/* Account Email Row */}
+          <div className="flex items-center justify-between gap-4 py-3.5">
+            <span className="text-[13px] font-medium text-slate-900 dark:text-slate-100 shrink-0">
+              Email
+            </span>
+            <span className="text-xs font-mono text-slate-500 dark:text-slate-400 truncate">
+              {user.email}
+            </span>
+          </div>
+
+          {/* Display Name Edit Row */}
+          <form onSubmit={(e) => void handleSubmit(e)} className="py-3.5 space-y-2.5">
             <div className="flex items-center justify-between gap-2">
               <label
                 htmlFor="settings-display-name"
-                className="text-xs font-semibold text-slate-700 dark:text-slate-200"
+                className="text-[13px] font-medium text-slate-900 dark:text-slate-100"
               >
                 Display Name
               </label>
@@ -109,7 +121,7 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
               </span>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5">
+            <div className="flex flex-col sm:flex-row gap-2">
               <input
                 id="settings-display-name"
                 type="text"
@@ -120,14 +132,14 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
                   if (fieldError) setFieldError(null);
                 }}
                 placeholder="e.g., Alex Rivera or Product Team"
-                className="flex-1 h-11 px-3.5 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="flex-1 h-9 px-3 text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {isDirty && (
                   <Button
                     type="button"
                     variant="secondary"
-                    size="md"
+                    size="sm"
                     disabled={saving}
                     onClick={() => {
                       setDraftName(user.name);
@@ -140,10 +152,10 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
                 <Button
                   type="submit"
                   variant="primary"
-                  size="md"
+                  size="sm"
                   loading={saving}
                   disabled={!isDirty || saving}
-                  leftIcon={<Check weight="bold" className="w-4 h-4" />}
+                  leftIcon={<Check weight="bold" className="w-3.5 h-3.5" />}
                 >
                   Save Name
                 </Button>
@@ -152,18 +164,17 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
 
             {fieldError ? (
               <p className="text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                <WarningCircle weight="duotone" className="w-4 h-4 shrink-0" />
+                <WarningCircle weight="duotone" className="w-3.5 h-3.5 shrink-0" />
                 {fieldError}
               </p>
             ) : (
               <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                Shown as the &ldquo;Shared by&rdquo; name on public Sked links and across your
-                workspace header.
+                Shown as the &ldquo;Shared by&rdquo; name on public links and workspace headers.
                 {sharedCount > 0 && (
                   <>
                     {' '}
-                    Saving updates your{' '}
-                    <strong className="font-semibold text-slate-700 dark:text-slate-200">
+                    Updates your{' '}
+                    <strong className="font-medium text-slate-700 dark:text-slate-200">
                       {sharedCount} active shared {sharedCount === 1 ? 'chart' : 'charts'}
                     </strong>{' '}
                     automatically.
@@ -176,29 +187,26 @@ export function ProfileSettingsTab({ onRequestDeleteAccount }: ProfileSettingsTa
       </section>
 
       {/* Danger Zone */}
-      <section className="space-y-3 pt-2 border-t border-slate-200/80 dark:border-white/[0.08]">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+      <section className="pt-2 border-t border-slate-100 dark:border-white/[0.07]">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-rose-500/90 dark:text-rose-400/90 pb-2">
           Danger Zone
-        </h3>
+        </h4>
 
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-rose-200/80 dark:border-rose-500/20 bg-rose-50/45 dark:bg-rose-500/[0.05]">
-          <div className="flex items-center gap-3 min-w-0">
-            <UserCircle weight="duotone" className="w-6 h-6 text-rose-600 dark:text-rose-400 shrink-0" />
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
-                Delete Account
-              </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                Permanently erase your account, workspaces, tasks, Telegram link, and public shares.
-              </p>
-            </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-rose-200/75 dark:border-rose-500/20 bg-rose-50/40 dark:bg-rose-500/[0.05]">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+              Delete Account
+            </p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 leading-snug">
+              Permanently erase your account, workspaces, tasks, Telegram link, and shares.
+            </p>
           </div>
           <Button
             variant="danger"
-            size="sm"
+            size="xs"
             className="shrink-0 self-start sm:self-center"
             onClick={onRequestDeleteAccount}
-            leftIcon={<Trash weight="duotone" className="w-4 h-4" />}
+            leftIcon={<Trash weight="duotone" className="w-3.5 h-3.5" />}
           >
             Delete Account
           </Button>

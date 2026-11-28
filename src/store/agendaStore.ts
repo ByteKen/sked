@@ -2,9 +2,14 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { auth } from '@/config/firebase';
 import {
-  computeReminderTargetISO,
+  computeNextAgendaReminder,
+  isRepeatingAgendaItem,
+  isValidISODateString,
+  normalizeAgendaRecurrence,
   sanitizeAgendaItems,
+  sanitizeCompletedDates,
   sortAgendaItems,
+  toggleAgendaItemCompletion,
 } from '@/domain/agenda';
 import {
   deleteAgendaItemViaApi,
@@ -30,7 +35,7 @@ interface AgendaStoreState {
   initAgenda: () => () => void;
   cleanup: () => void;
   saveItem: (draft: AgendaItemDraft) => Promise<AgendaMutationResult>;
-  toggleDone: (itemId: string) => Promise<AgendaMutationResult>;
+  toggleDone: (itemId: string, occurrenceDate?: string) => Promise<AgendaMutationResult>;
   deleteItem: (itemId: string) => Promise<AgendaMutationResult>;
 }
 
@@ -65,6 +70,8 @@ export const useAgendaStore = create<AgendaStoreState>()(
         return () => {};
       }
 
+      set({ loading: true });
+
       const unsubscribe = userDocumentSync.subscribe(
         (snapshot) => {
           if (!snapshot.exists || !snapshot.data) {
@@ -88,7 +95,7 @@ export const useAgendaStore = create<AgendaStoreState>()(
     cleanup: () => {
       const { unsubscribe } = get();
       if (unsubscribe) unsubscribe();
-      set({ items: [], telegramConfig: null, loading: false, unsubscribe: null });
+      set({ items: [], telegramConfig: null, loading: true, unsubscribe: null });
     },
 
     saveItem: async (draft) => {
@@ -139,7 +146,7 @@ export const useAgendaStore = create<AgendaStoreState>()(
       }
     },
 
-    toggleDone: async (itemId) => {
+    toggleDone: async (itemId, occurrenceDate) => {
       const user = auth.currentUser;
       if (!user) return { ok: false, error: 'You must be signed in.' };
 
@@ -148,14 +155,16 @@ export const useAgendaStore = create<AgendaStoreState>()(
       if (!target) return { ok: false, error: 'Agenda item not found.' };
 
       const telegramActive = Boolean(telegramConfig?.connected && telegramConfig?.enabled);
+      const repeating = isRepeatingAgendaItem(target);
       const needsCloudTaskSync = Boolean(
         target.cloudTaskName ||
+          (repeating && target.reminderOffsetMinutes !== null && telegramActive) ||
           (target.isDone && target.reminderOffsetMinutes !== null && !target.reminderSentAt && telegramActive),
       );
 
       if (needsCloudTaskSync) {
         try {
-          const response = await toggleAgendaDoneViaApi(itemId);
+          const response = await toggleAgendaDoneViaApi(itemId, occurrenceDate);
           set({ items: sanitizeAgendaItems(response.items) });
           return { ok: true, item: response.item, warning: response.warning };
         } catch (err) {
@@ -164,11 +173,24 @@ export const useAgendaStore = create<AgendaStoreState>()(
       }
 
       const nowISO = new Date().toISOString();
+      const toggled = toggleAgendaItemCompletion(target, occurrenceDate, nowISO);
+      const nextReminder = repeating
+        ? computeNextAgendaReminder({
+            date: toggled.date,
+            time: toggled.time,
+            recurrence: toggled.recurrence,
+            recurrenceEndDate: toggled.recurrenceEndDate,
+            completedDates: toggled.completedDates,
+            reminderOffsetMinutes: toggled.reminderOffsetMinutes,
+            timezone: toggled.timezone,
+            defaultReminderHour: telegramConfig?.reminderHour ?? 9,
+          })
+        : null;
+
       const updatedItem: AgendaItem = {
-        ...target,
-        isDone: !target.isDone,
-        cloudTaskName: !target.isDone ? null : target.cloudTaskName ?? null,
-        updatedAt: nowISO,
+        ...toggled,
+        ...(repeating ? { reminderTargetISO: nextReminder?.reminderTargetISO ?? null } : {}),
+        cloudTaskName: !repeating && toggled.isDone ? null : (target.cloudTaskName ?? null),
       };
       const nextItems = sortAgendaItems(
         items.map((entry) => (entry.id === itemId ? updatedItem : entry)),
@@ -228,13 +250,30 @@ async function persistItemDirectly(
   const id = previous?.id ?? generateLocalAgendaId();
   const trimmedNote = draft.note?.trim().slice(0, 500) || '';
   const time = draft.time && /^\d{2}:\d{2}$/.test(draft.time) ? draft.time : null;
-  const reminderTargetISO = computeReminderTargetISO({
-    date: draft.date,
-    time,
-    reminderOffsetMinutes: draft.reminderOffsetMinutes,
-    timezone: draft.timezone,
-    defaultReminderHour,
-  });
+  const recurrence = normalizeAgendaRecurrence(draft.recurrence ?? previous?.recurrence);
+  const recurrenceEndDate =
+    recurrence !== 'none' &&
+    isValidISODateString(draft.recurrenceEndDate) &&
+    draft.recurrenceEndDate >= draft.date
+      ? draft.recurrenceEndDate
+      : null;
+  const completedDates =
+    recurrence !== 'none' ? sanitizeCompletedDates(previous?.completedDates) : [];
+  const isDone =
+    recurrence !== 'none' ? false : Boolean(draft.isDone ?? previous?.isDone ?? false);
+
+  const reminderTargetISO =
+    computeNextAgendaReminder({
+      date: draft.date,
+      time,
+      isDone,
+      recurrence,
+      recurrenceEndDate,
+      completedDates,
+      reminderOffsetMinutes: draft.reminderOffsetMinutes,
+      timezone: draft.timezone,
+      defaultReminderHour,
+    })?.reminderTargetISO ?? null;
 
   const savedItem: AgendaItem = {
     id,
@@ -242,7 +281,10 @@ async function persistItemDirectly(
     date: draft.date,
     time,
     ...(trimmedNote ? { note: trimmedNote } : {}),
-    isDone: Boolean(draft.isDone ?? previous?.isDone ?? false),
+    isDone,
+    ...(recurrence !== 'none' ? { recurrence } : {}),
+    ...(recurrenceEndDate ? { recurrenceEndDate } : {}),
+    ...(completedDates.length > 0 ? { completedDates } : {}),
     reminderOffsetMinutes: draft.reminderOffsetMinutes,
     timezone: draft.timezone,
     reminderTargetISO,

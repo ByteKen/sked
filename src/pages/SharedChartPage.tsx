@@ -27,7 +27,7 @@ import { TaskModal } from '@/components/modals/TaskModal';
 import { Badge } from '@/components/ui/Badge';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { WorkspacePageSkeleton } from '@/components/skeletons/PageSkeletons';
 import { KanbanBoardView } from '@/components/views/KanbanBoardView';
 import { TaskListView } from '@/components/views/TaskListView';
 import { ExportMenu } from '@/components/workspace/ExportMenu';
@@ -588,15 +588,7 @@ export function SharedChartPage() {
   });
 
   if (loading) {
-    return (
-      <div className="min-h-screen studio-atmosphere p-6 space-y-4">
-        <Skeleton className="h-16 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Skeleton className="h-[75vh] md:col-span-1" />
-          <Skeleton className="h-[75vh] md:col-span-3" />
-        </div>
-      </div>
-    );
+    return <WorkspacePageSkeleton variant="shared" />;
   }
 
   if (!chart || loadError) {

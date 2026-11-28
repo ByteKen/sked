@@ -7,16 +7,17 @@ import { DEFAULT_PREFERENCES } from '@/types';
 vi.mock('@/store/authStore', () => ({
   useAuthStore: () => ({
     login: vi.fn().mockResolvedValue(undefined),
+    cancelSigningIn: vi.fn(),
     error: null,
     cancelled: false,
-    loading: false,
+    signingIn: false,
     clearError: vi.fn(),
   }),
 }));
 
 describe('LandingPage mobile sign-in toggle & default theme', () => {
   beforeEach(() => {
-    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => { });
   });
 
   it('uses light as the default application theme', () => {

@@ -16,6 +16,15 @@ export interface UserPreferences {
   showDependencyLines: boolean;
   showSubtaskConnectors: boolean;
   showTaskDescriptions: boolean;
+  enableAnimations: boolean;
+  showBarTooltips: boolean;
+  showProgressPercentages: boolean;
+  showTodayLine: boolean;
+  highlightWeekends: boolean;
+  showCriticalPathByDefault: boolean;
+  autoCascadeDependencies: boolean;
+  enableInAppReminders: boolean;
+  reminderSoundEnabled: boolean;
 }
 
 export interface SharedChartViewPrefs {
@@ -26,6 +35,9 @@ export interface SharedChartViewPrefs {
   showDependencyLines: boolean;
   showSubtaskConnectors: boolean;
   showTaskDescriptions?: boolean;
+  showProgressPercentages?: boolean;
+  showTodayLine?: boolean;
+  highlightWeekends?: boolean;
 }
 
 export interface TelegramNotificationConfig {
@@ -54,4 +66,13 @@ export const DEFAULT_PREFERENCES: UserPreferences = {
   showDependencyLines: true,
   showSubtaskConnectors: true,
   showTaskDescriptions: false,
+  enableAnimations: true,
+  showBarTooltips: true,
+  showProgressPercentages: true,
+  showTodayLine: true,
+  highlightWeekends: true,
+  showCriticalPathByDefault: false,
+  autoCascadeDependencies: true,
+  enableInAppReminders: true,
+  reminderSoundEnabled: true,
 };

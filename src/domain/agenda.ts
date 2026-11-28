@@ -2,10 +2,16 @@ import type {
   AgendaDeliveryStatus,
   AgendaItem,
   AgendaItemDraft,
+  AgendaRecurrenceFrequency,
   AgendaReminderOffset,
 } from '../types/agenda.js';
 import type { Task } from '../types/task.js';
-import { escapeTelegramHtml, isValidTimeZone, sanitizeSafeAppUrl } from './reminders.js';
+import {
+  escapeTelegramHtml,
+  getLocalDatePartsInTimezone,
+  isValidTimeZone,
+  sanitizeSafeAppUrl,
+} from './reminders.js';
 
 export interface CalendarWorkspaceSummary {
   id: string;
@@ -15,7 +21,16 @@ export interface CalendarWorkspaceSummary {
 }
 
 export const ALLOWED_AGENDA_REMINDER_OFFSETS: readonly AgendaReminderOffset[] = [0, 15, 30, 60];
+export const ALLOWED_AGENDA_RECURRENCES: readonly AgendaRecurrenceFrequency[] = [
+  'none',
+  'daily',
+  'weekdays',
+  'weekly',
+  'monthly',
+  'yearly',
+];
 export const MAX_AGENDA_ITEMS = 250;
+export const MAX_STORED_COMPLETED_DATES = 120;
 export const CLOUD_TASK_MAX_LEAD_MS = 29 * 86_400_000; // 29-day safe buffer under GCP's 30-day limit
 export const IN_APP_REMINDER_CATCHUP_MS = 2 * 60_000; // 2-minute grace window for tab wakeups
 const MAX_SAFE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // Cap setTimeout safely well below 32-bit max
@@ -28,6 +43,24 @@ export const AGENDA_REMINDER_LABELS: Record<string, string> = {
   '60': '1 hour before',
 };
 
+export const AGENDA_RECURRENCE_LABELS: Record<AgendaRecurrenceFrequency, string> = {
+  none: 'Does not repeat',
+  daily: 'Every day',
+  weekdays: 'Weekdays (Mon–Fri)',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  yearly: 'Every year',
+};
+
+export const AGENDA_RECURRENCE_SHORT_LABELS: Record<AgendaRecurrenceFrequency, string> = {
+  none: 'Once',
+  daily: 'Daily',
+  weekdays: 'Weekdays',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+
 export interface AgendaValidationResult {
   valid: boolean;
   error?: string;
@@ -38,6 +71,13 @@ export interface CalendarDayCell {
   dayNumber: number;
   inCurrentMonth: boolean;
   isToday: boolean;
+}
+
+export interface CalendarAgendaOccurrence {
+  item: AgendaItem;
+  occurrenceDate: string;
+  isDone: boolean;
+  isRepeating: boolean;
 }
 
 export interface CalendarDeadlineItem {
@@ -89,6 +129,171 @@ export function normalizeAgendaReminderOffset(raw: unknown): AgendaReminderOffse
     return num;
   }
   return null;
+}
+
+export function normalizeAgendaRecurrence(raw: unknown): AgendaRecurrenceFrequency {
+  if (
+    raw === 'daily' ||
+    raw === 'weekdays' ||
+    raw === 'weekly' ||
+    raw === 'monthly' ||
+    raw === 'yearly'
+  ) {
+    return raw;
+  }
+  return 'none';
+}
+
+export function isRepeatingAgendaItem(item: Pick<AgendaItem, 'recurrence'>): boolean {
+  return normalizeAgendaRecurrence(item.recurrence) !== 'none';
+}
+
+export function sanitizeCompletedDates(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const validSet = new Set<string>();
+  for (const entry of raw) {
+    if (isValidISODateString(entry)) {
+      validSet.add(entry);
+    }
+  }
+  return Array.from(validSet)
+    .sort((a, b) => a.localeCompare(b))
+    .slice(-MAX_STORED_COMPLETED_DATES);
+}
+
+export function isAgendaOccurrenceDone(
+  item: Pick<AgendaItem, 'isDone' | 'recurrence' | 'completedDates'>,
+  occurrenceDate: string,
+): boolean {
+  if (!isRepeatingAgendaItem(item)) return Boolean(item.isDone);
+  return Boolean(item.completedDates?.includes(occurrenceDate));
+}
+
+function parseISODateParts(iso: string): { year: number; month: number; day: number; dow: number } {
+  const [year = 2026, month = 1, day = 1] = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)).getUTCDay();
+  return { year, month, day, dow };
+}
+
+function daysInUtcMonth(year: number, month1Based: number): number {
+  return new Date(Date.UTC(year, month1Based, 0, 12, 0, 0)).getUTCDate();
+}
+
+function formatUtcDateParts(year: number, month1Based: number, day: number): string {
+  return `${String(year).padStart(4, '0')}-${String(month1Based).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function addCalendarDaysISO(dateISO: string, deltaDays: number): string {
+  const [y = 2026, m = 1, d = 1] = dateISO.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
+  return formatUtcDateParts(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+}
+
+/**
+ * Pure O(1) occurrence test for whether a one-off or repeating agenda item lands on `targetDateISO`.
+ * Handles month-end clamping (e.g., Jan 31 -> Feb 28/29 -> Mar 31) and leap days cleanly.
+ */
+export function doesAgendaItemOccurOnDate(
+  item: Pick<AgendaItem, 'date' | 'recurrence' | 'recurrenceEndDate'>,
+  targetDateISO: string,
+): boolean {
+  if (!isValidISODateString(item.date) || !isValidISODateString(targetDateISO)) return false;
+  if (targetDateISO < item.date) return false;
+  if (item.recurrenceEndDate && isValidISODateString(item.recurrenceEndDate)) {
+    if (targetDateISO > item.recurrenceEndDate) return false;
+  }
+
+  const freq = normalizeAgendaRecurrence(item.recurrence);
+  if (freq === 'none') return targetDateISO === item.date;
+  if (freq === 'daily') return true;
+
+  const start = parseISODateParts(item.date);
+  const target = parseISODateParts(targetDateISO);
+
+  if (freq === 'weekdays') {
+    return target.dow >= 1 && target.dow <= 5;
+  }
+  if (freq === 'weekly') {
+    return target.dow === start.dow;
+  }
+  if (freq === 'monthly') {
+    const expectedDay = Math.min(start.day, daysInUtcMonth(target.year, target.month));
+    return target.day === expectedDay;
+  }
+  // yearly
+  if (target.month !== start.month) return false;
+  const expectedDay = Math.min(start.day, daysInUtcMonth(target.year, target.month));
+  return target.day === expectedDay;
+}
+
+/**
+ * Pure O(1) next occurrence date finder (`>= fromDateISO` when `inclusive`, else `> fromDateISO`).
+ * Returns `null` once past `recurrenceEndDate` or past a non-repeating item's single date.
+ */
+export function getNextAgendaOccurrenceDate(
+  item: Pick<AgendaItem, 'date' | 'recurrence' | 'recurrenceEndDate'>,
+  fromDateISO: string,
+  inclusive = true,
+): string | null {
+  if (!isValidISODateString(item.date) || !isValidISODateString(fromDateISO)) return null;
+
+  const base = inclusive ? fromDateISO : addCalendarDaysISO(fromDateISO, 1);
+  const searchFrom = base < item.date ? item.date : base;
+  const endDate =
+    item.recurrenceEndDate && isValidISODateString(item.recurrenceEndDate)
+      ? item.recurrenceEndDate
+      : null;
+
+  if (endDate && searchFrom > endDate) return null;
+
+  const freq = normalizeAgendaRecurrence(item.recurrence);
+  let candidate: string | null = null;
+
+  if (freq === 'none') {
+    candidate = searchFrom === item.date ? item.date : null;
+  } else if (freq === 'daily') {
+    candidate = searchFrom;
+  } else if (freq === 'weekdays') {
+    const { dow } = parseISODateParts(searchFrom);
+    if (dow === 6) candidate = addCalendarDaysISO(searchFrom, 2);
+    else if (dow === 0) candidate = addCalendarDaysISO(searchFrom, 1);
+    else candidate = searchFrom;
+  } else if (freq === 'weekly') {
+    const startDow = parseISODateParts(item.date).dow;
+    const searchDow = parseISODateParts(searchFrom).dow;
+    const delta = (startDow - searchDow + 7) % 7;
+    candidate = addCalendarDaysISO(searchFrom, delta);
+  } else if (freq === 'monthly') {
+    const startDay = parseISODateParts(item.date).day;
+    const s = parseISODateParts(searchFrom);
+    const thisMonthDay = Math.min(startDay, daysInUtcMonth(s.year, s.month));
+    const thisMonthIso = formatUtcDateParts(s.year, s.month, thisMonthDay);
+    if (thisMonthIso >= searchFrom) {
+      candidate = thisMonthIso;
+    } else {
+      const nextMonth = s.month === 12 ? 1 : s.month + 1;
+      const nextYear = s.month === 12 ? s.year + 1 : s.year;
+      const nextDay = Math.min(startDay, daysInUtcMonth(nextYear, nextMonth));
+      candidate = formatUtcDateParts(nextYear, nextMonth, nextDay);
+    }
+  } else {
+    // yearly
+    const start = parseISODateParts(item.date);
+    const s = parseISODateParts(searchFrom);
+    const thisYearDay = Math.min(start.day, daysInUtcMonth(s.year, start.month));
+    const thisYearIso = formatUtcDateParts(s.year, start.month, thisYearDay);
+    if (thisYearIso >= searchFrom) {
+      candidate = thisYearIso;
+    } else {
+      const nextYear = s.year + 1;
+      const nextDay = Math.min(start.day, daysInUtcMonth(nextYear, start.month));
+      candidate = formatUtcDateParts(nextYear, start.month, nextDay);
+    }
+  }
+
+  if (!candidate) return null;
+  if (endDate && candidate > endDate) return null;
+  return candidate;
 }
 
 export function formatClockTime12h(time24: string | null | undefined): string {
@@ -182,6 +387,128 @@ export function computeReminderTargetISO(params: {
   return new Date(alertUtcMs).toISOString();
 }
 
+/**
+ * Computes the next uncompleted occurrence & exact UTC alert instant for either a one-off or
+ * repeating agenda item. For repeating items, skips completed dates and past alerts cleanly.
+ */
+export function computeNextAgendaReminder(params: {
+  date: string;
+  time?: string | null;
+  isDone?: boolean;
+  recurrence?: AgendaRecurrenceFrequency;
+  recurrenceEndDate?: string | null;
+  completedDates?: readonly string[];
+  reminderOffsetMinutes: AgendaReminderOffset | null;
+  timezone: string;
+  defaultReminderHour?: number;
+  nowMs?: number;
+  minAlertUtcMs?: number;
+}): { occurrenceDate: string; reminderTargetISO: string } | null {
+  if (params.reminderOffsetMinutes === null) return null;
+
+  const freq = normalizeAgendaRecurrence(params.recurrence);
+  if (freq === 'none') {
+    if (params.isDone) return null;
+    const reminderTargetISO = computeReminderTargetISO({
+      date: params.date,
+      time: params.time,
+      reminderOffsetMinutes: params.reminderOffsetMinutes,
+      timezone: params.timezone,
+      defaultReminderHour: params.defaultReminderHour,
+    });
+    return reminderTargetISO ? { occurrenceDate: params.date, reminderTargetISO } : null;
+  }
+
+  const nowMs = params.nowMs ?? Date.now();
+  const minAlertUtcMs = params.minAlertUtcMs ?? nowMs - 60_000;
+  const completedSet = new Set(params.completedDates ?? []);
+  const localTodayISO = getLocalDatePartsInTimezone(new Date(nowMs), params.timezone).dateISO;
+  // Look back 1 day so lead-time offsets crossing midnight (e.g. 00:15 event alerting at 23:45) are never missed
+  const searchFloor = addCalendarDaysISO(localTodayISO, -1);
+  let cursorDate = searchFloor > params.date ? searchFloor : params.date;
+
+  for (let step = 0; step < 32; step += 1) {
+    const occDate = getNextAgendaOccurrenceDate(
+      {
+        date: params.date,
+        recurrence: freq,
+        recurrenceEndDate: params.recurrenceEndDate ?? null,
+      },
+      cursorDate,
+      step === 0,
+    );
+    if (!occDate) return null;
+
+    if (!completedSet.has(occDate)) {
+      const targetISO = computeReminderTargetISO({
+        date: occDate,
+        time: params.time,
+        reminderOffsetMinutes: params.reminderOffsetMinutes,
+        timezone: params.timezone,
+        defaultReminderHour: params.defaultReminderHour,
+      });
+      if (targetISO) {
+        const targetMs = Date.parse(targetISO);
+        if (!Number.isNaN(targetMs) && targetMs > minAlertUtcMs) {
+          return { occurrenceDate: occDate, reminderTargetISO: targetISO };
+        }
+      }
+    }
+
+    cursorDate = occDate;
+  }
+
+  return null;
+}
+
+/**
+ * Given an agenda alert timestamp (`reminderTargetISO`), derives the local calendar occurrence date
+ * (`YYYY-MM-DD`) of the underlying event (accounting for lead-time offsets crossing midnight).
+ */
+export function resolveOccurrenceDateForAlert(
+  item: Pick<AgendaItem, 'date' | 'reminderOffsetMinutes' | 'reminderTargetISO' | 'timezone' | 'recurrence'>,
+  targetISOOverride?: string | null,
+): string {
+  if (!isRepeatingAgendaItem(item)) return item.date;
+  const targetISO = targetISOOverride ?? item.reminderTargetISO;
+  if (!targetISO) return item.date;
+  const targetMs = Date.parse(targetISO);
+  if (Number.isNaN(targetMs)) return item.date;
+  const offsetMs = (item.reminderOffsetMinutes ?? 0) * 60_000;
+  return getLocalDatePartsInTimezone(new Date(targetMs + offsetMs), item.timezone).dateISO;
+}
+
+export function toggleAgendaItemCompletion(
+  item: AgendaItem,
+  occurrenceDate: string | undefined,
+  nowISO: string,
+): AgendaItem {
+  if (!isRepeatingAgendaItem(item)) {
+    return {
+      ...item,
+      isDone: !item.isDone,
+      updatedAt: nowISO,
+    };
+  }
+
+  const targetDate =
+    occurrenceDate && isValidISODateString(occurrenceDate)
+      ? occurrenceDate
+      : getLocalDatePartsInTimezone(new Date(nowISO), item.timezone).dateISO;
+
+  const existing = sanitizeCompletedDates(item.completedDates);
+  const nextCompleted = existing.includes(targetDate)
+    ? existing.filter((d) => d !== targetDate)
+    : sanitizeCompletedDates([...existing, targetDate]);
+
+  return {
+    ...item,
+    isDone: false,
+    completedDates: nextCompleted,
+    updatedAt: nowISO,
+  };
+}
+
 export function isWithinCloudTaskWindow(targetISO: string, nowMs = Date.now()): boolean {
   const targetMs = Date.parse(targetISO);
   if (Number.isNaN(targetMs)) return false;
@@ -212,6 +539,16 @@ export function validateAgendaDraft(draft: AgendaItemDraft): AgendaValidationRes
     return { valid: false, error: 'Note must be 500 characters or fewer.' };
   }
 
+  const recurrence = normalizeAgendaRecurrence(draft.recurrence);
+  if (recurrence !== 'none' && draft.recurrenceEndDate) {
+    if (!isValidISODateString(draft.recurrenceEndDate)) {
+      return { valid: false, error: 'Choose a valid repeat end date.' };
+    }
+    if (draft.recurrenceEndDate < draft.date) {
+      return { valid: false, error: 'Repeat end date must be on or after the start date.' };
+    }
+  }
+
   return { valid: true };
 }
 
@@ -226,12 +563,28 @@ export function sanitizeAgendaItem(raw: Partial<AgendaItem>): AgendaItem | null 
   const timezone =
     typeof raw.timezone === 'string' && isValidTimeZone(raw.timezone) ? raw.timezone : 'UTC';
   const reminderOffsetMinutes = normalizeAgendaReminderOffset(raw.reminderOffsetMinutes);
+  const recurrence = normalizeAgendaRecurrence(raw.recurrence);
+  const recurrenceEndDate =
+    recurrence !== 'none' && isValidISODateString(raw.recurrenceEndDate) && raw.recurrenceEndDate >= date
+      ? raw.recurrenceEndDate
+      : null;
+  const completedDates = recurrence !== 'none' ? sanitizeCompletedDates(raw.completedDates) : [];
+  const isDone = recurrence !== 'none' ? false : Boolean(raw.isDone);
   const nowISO = new Date().toISOString();
 
   const reminderTargetISO =
     typeof raw.reminderTargetISO === 'string' && !Number.isNaN(Date.parse(raw.reminderTargetISO))
       ? raw.reminderTargetISO
-      : computeReminderTargetISO({ date, time, reminderOffsetMinutes, timezone });
+      : computeNextAgendaReminder({
+          date,
+          time,
+          isDone,
+          recurrence,
+          recurrenceEndDate,
+          completedDates,
+          reminderOffsetMinutes,
+          timezone,
+        })?.reminderTargetISO ?? null;
 
   return {
     id,
@@ -239,7 +592,10 @@ export function sanitizeAgendaItem(raw: Partial<AgendaItem>): AgendaItem | null 
     date,
     time,
     ...(note ? { note } : {}),
-    isDone: Boolean(raw.isDone),
+    isDone,
+    ...(recurrence !== 'none' ? { recurrence } : {}),
+    ...(recurrenceEndDate ? { recurrenceEndDate } : {}),
+    ...(completedDates.length > 0 ? { completedDates } : {}),
     reminderOffsetMinutes,
     timezone,
     reminderTargetISO: reminderOffsetMinutes !== null ? reminderTargetISO : null,
@@ -276,21 +632,90 @@ export function sortAgendaItems(items: readonly AgendaItem[]): AgendaItem[] {
   });
 }
 
+/**
+ * Expands one-off and repeating agenda items across a list of visible calendar dates (`YYYY-MM-DD`).
+ */
+export function expandAgendaItemsForDates(
+  items: readonly AgendaItem[],
+  dateISOs: readonly string[],
+): Map<string, CalendarAgendaOccurrence[]> {
+  const map = new Map<string, CalendarAgendaOccurrence[]>();
+
+  for (const dateISO of dateISOs) {
+    const matches: CalendarAgendaOccurrence[] = [];
+    for (const item of items) {
+      if (!doesAgendaItemOccurOnDate(item, dateISO)) continue;
+      matches.push({
+        item,
+        occurrenceDate: dateISO,
+        isDone: isAgendaOccurrenceDone(item, dateISO),
+        isRepeating: isRepeatingAgendaItem(item),
+      });
+    }
+
+    if (matches.length > 0) {
+      matches.sort((a, b) => {
+        const aTime = a.item.time ?? '99:99';
+        const bTime = b.item.time ?? '99:99';
+        if (aTime !== bTime) return aTime.localeCompare(bTime);
+        return a.item.title.localeCompare(b.item.title);
+      });
+      map.set(dateISO, matches);
+    }
+  }
+
+  return map;
+}
+
 export function getAgendaDeliveryStatus(
   item: AgendaItem,
   telegramConnected: boolean,
   nowMs = Date.now(),
+  occurrenceDate?: string,
 ): AgendaDeliveryStatus {
-  if (item.reminderOffsetMinutes === null || item.isDone) return 'none';
-  if (item.reminderSentAt) return 'sent';
-  if (!telegramConnected) return 'unlinked';
-  if (item.cloudTaskName) return 'scheduled';
-  if (item.reminderTargetISO) {
-    const targetMs = Date.parse(item.reminderTargetISO);
-    if (!Number.isNaN(targetMs)) {
-      if (targetMs <= nowMs - 60_000) return 'past';
-      if (isDeferredBeyondCloudTaskWindow(item.reminderTargetISO, nowMs)) return 'deferred';
+  const effectiveDate = occurrenceDate ?? item.date;
+  if (item.reminderOffsetMinutes === null || isAgendaOccurrenceDone(item, effectiveDate)) {
+    return 'none';
+  }
+
+  if (!isRepeatingAgendaItem(item)) {
+    if (item.reminderSentAt) return 'sent';
+    if (!telegramConnected) return 'unlinked';
+    if (item.cloudTaskName) return 'scheduled';
+    if (item.reminderTargetISO) {
+      const targetMs = Date.parse(item.reminderTargetISO);
+      if (!Number.isNaN(targetMs)) {
+        if (targetMs <= nowMs - 60_000) return 'past';
+        if (isDeferredBeyondCloudTaskWindow(item.reminderTargetISO, nowMs)) return 'deferred';
+      }
     }
+    return 'unconfigured';
+  }
+
+  if (!telegramConnected) return 'unlinked';
+
+  const occTargetISO = computeReminderTargetISO({
+    date: effectiveDate,
+    time: item.time,
+    reminderOffsetMinutes: item.reminderOffsetMinutes,
+    timezone: item.timezone,
+  });
+  const occTargetMs = occTargetISO ? Date.parse(occTargetISO) : NaN;
+
+  if (!Number.isNaN(occTargetMs) && occTargetMs <= nowMs - 60_000) {
+    if (item.reminderSentAt) {
+      const sentMs = Date.parse(item.reminderSentAt);
+      if (!Number.isNaN(sentMs) && sentMs >= occTargetMs - 60_000) {
+        return 'sent';
+      }
+    }
+    return 'past';
+  }
+
+  if (item.cloudTaskName) return 'scheduled';
+  if (occTargetISO && isDeferredBeyondCloudTaskWindow(occTargetISO, nowMs)) return 'deferred';
+  if (item.reminderTargetISO && isDeferredBeyondCloudTaskWindow(item.reminderTargetISO, nowMs)) {
+    return 'deferred';
   }
   return 'unconfigured';
 }
@@ -411,8 +836,8 @@ export function getAgendaReminderHeading(
 
 /**
  * Pure local scheduler selector for in-app alerts while Sked is open.
- * Returns any open agenda items whose exact alert instant fell inside `[nowMs - catchupMs, nowMs]`
- * and have not yet fired, plus the exact millisecond delay until the soonest upcoming alert.
+ * Handles both one-off and repeating agenda items dynamically so long-lived tabs fire
+ * every recurring occurrence on time without polling or page refreshes.
  */
 export function findDueAndNextInAppReminders(
   items: readonly AgendaItem[],
@@ -424,17 +849,68 @@ export function findDueAndNextInAppReminders(
   let soonestFutureMs: number | null = null;
 
   for (const item of items) {
-    if (item.isDone || item.reminderOffsetMinutes === null || !item.reminderTargetISO) {
+    if (item.reminderOffsetMinutes === null) continue;
+
+    if (!isRepeatingAgendaItem(item)) {
+      if (item.isDone || !item.reminderTargetISO) continue;
+      const firedKey = buildAgendaFiredKey(item);
+      if (firedKeys.has(firedKey)) continue;
+
+      const targetMs = Date.parse(item.reminderTargetISO);
+      if (Number.isNaN(targetMs)) continue;
+
+      if (targetMs <= nowMs && targetMs >= nowMs - catchupWindowMs) {
+        due.push(item);
+      } else if (targetMs > nowMs) {
+        if (soonestFutureMs === null || targetMs < soonestFutureMs) {
+          soonestFutureMs = targetMs;
+        }
+      }
       continue;
     }
-    const firedKey = buildAgendaFiredKey(item);
-    if (firedKeys.has(firedKey)) continue;
 
-    const targetMs = Date.parse(item.reminderTargetISO);
+    // Repeating item: resolve the active catchup/next occurrence dynamically
+    let match = computeNextAgendaReminder({
+      date: item.date,
+      time: item.time,
+      recurrence: item.recurrence,
+      recurrenceEndDate: item.recurrenceEndDate,
+      completedDates: item.completedDates,
+      reminderOffsetMinutes: item.reminderOffsetMinutes,
+      timezone: item.timezone,
+      nowMs,
+      minAlertUtcMs: nowMs - catchupWindowMs - 1,
+    });
+
+    if (!match) continue;
+    let firedKey = buildAgendaFiredKey({ id: item.id, reminderTargetISO: match.reminderTargetISO });
+    if (firedKeys.has(firedKey)) {
+      const prevMs = Date.parse(match.reminderTargetISO);
+      match = computeNextAgendaReminder({
+        date: item.date,
+        time: item.time,
+        recurrence: item.recurrence,
+        recurrenceEndDate: item.recurrenceEndDate,
+        completedDates: item.completedDates,
+        reminderOffsetMinutes: item.reminderOffsetMinutes,
+        timezone: item.timezone,
+        nowMs,
+        minAlertUtcMs: Math.max(nowMs, Number.isNaN(prevMs) ? nowMs : prevMs),
+      });
+      if (!match) continue;
+      firedKey = buildAgendaFiredKey({ id: item.id, reminderTargetISO: match.reminderTargetISO });
+      if (firedKeys.has(firedKey)) continue;
+    }
+
+    const targetMs = Date.parse(match.reminderTargetISO);
     if (Number.isNaN(targetMs)) continue;
 
     if (targetMs <= nowMs && targetMs >= nowMs - catchupWindowMs) {
-      due.push(item);
+      due.push({
+        ...item,
+        date: match.occurrenceDate,
+        reminderTargetISO: match.reminderTargetISO,
+      });
     } else if (targetMs > nowMs) {
       if (soonestFutureMs === null || targetMs < soonestFutureMs) {
         soonestFutureMs = targetMs;
@@ -450,11 +926,17 @@ export function findDueAndNextInAppReminders(
   return { due, nextDelayMs };
 }
 
-export function formatAgendaTelegramMessage(item: AgendaItem, appBaseUrl?: string): string {
+export function formatAgendaTelegramMessage(
+  item: AgendaItem,
+  appBaseUrl?: string,
+  occurrenceDateOverride?: string,
+): string {
   const safeTitle = escapeTelegramHtml(item.title);
-  const dateLabel = formatReadableAgendaDate(item.date);
+  const effectiveDate = occurrenceDateOverride ?? item.date;
+  const dateLabel = formatReadableAgendaDate(effectiveDate);
   const timeLabel = item.time ? formatClockTime12h(item.time) : 'All day';
   const heading = getAgendaReminderHeading(item);
+  const recurrence = normalizeAgendaRecurrence(item.recurrence);
 
   const lines: string[] = [
     `<b>${heading.emoji} ${escapeTelegramHtml(heading.text)}</b>`,
@@ -462,6 +944,10 @@ export function formatAgendaTelegramMessage(item: AgendaItem, appBaseUrl?: strin
     `📌 <b>${safeTitle}</b>`,
     `🗓 ${escapeTelegramHtml(dateLabel)} · <b>${escapeTelegramHtml(timeLabel)}</b>`,
   ];
+
+  if (recurrence !== 'none') {
+    lines.push(`🔁 Repeats ${escapeTelegramHtml(AGENDA_RECURRENCE_LABELS[recurrence].toLowerCase())}`);
+  }
 
   if (item.note?.trim()) {
     lines.push('', `<i>${escapeTelegramHtml(item.note.trim())}</i>`);

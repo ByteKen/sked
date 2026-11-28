@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GanttWorkspace } from '@/components/gantt/GanttWorkspace';
-import type { Task } from '@/types';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { DEFAULT_PREFERENCES, type Task } from '@/types';
 
 const tasksFixture: Task[] = [
   {
@@ -36,6 +37,10 @@ const tasksFixture: Task[] = [
 ];
 
 describe('GanttWorkspace unified split-pane alignment', () => {
+  beforeEach(() => {
+    usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
+  });
+
   it('hides child rows from both task hierarchy and timeline bars when collapsing a parent in read-only mode', async () => {
     const user = userEvent.setup();
     render(
@@ -511,5 +516,87 @@ describe('GanttWorkspace unified split-pane alignment', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('keeps timeline bar progress fills mounted and updates scaleX smoothly when progress increases or decreases', () => {
+    const { rerender } = render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        readOnly
+      />,
+    );
+
+    const phaseFill = screen.getByTestId('task-progress-fill-1');
+    const doneFill = screen.getByTestId('task-progress-fill-2');
+    const zeroFill = screen.getByTestId('task-progress-fill-3');
+
+    // Initial states: 50% visible, 100% and 0% mounted at scaleX(1)/scaleX(0) with opacity 0
+    expect(phaseFill).toHaveStyle({ transform: 'scaleX(0.5)', opacity: '1' });
+    expect(doneFill).toHaveStyle({ transform: 'scaleX(1)', opacity: '0' });
+    expect(zeroFill).toHaveStyle({ transform: 'scaleX(0)', opacity: '0' });
+    expect(phaseFill.className).toContain('motion-reduce:transition-none');
+
+    // Increase CI Pipeline 0% -> 70% and decrease Phase 1 50% -> 35%
+    const updatedTasks: Task[] = tasksFixture.map((task) =>
+      task.id === 1
+        ? {
+          ...task,
+          progress: 35,
+          children: task.children?.map((child) =>
+            child.id === 3 ? { ...child, progress: 70 } : child,
+          ),
+        }
+        : task,
+    );
+
+    rerender(
+      <GanttWorkspace
+        tasks={updatedTasks}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+        readOnly
+      />,
+    );
+
+    expect(screen.getByTestId('task-progress-fill-1')).toHaveStyle({
+      transform: 'scaleX(0.35)',
+      opacity: '1',
+    });
+    expect(screen.getByTestId('task-progress-fill-3')).toHaveStyle({
+      transform: 'scaleX(0.7)',
+      opacity: '1',
+    });
+  });
+
+  it('respects display preferences for hover tooltips, progress percentages, and today marker', () => {
+    usePreferencesStore.setState({
+      ...DEFAULT_PREFERENCES,
+      showBarTooltips: false,
+      showProgressPercentages: false,
+      showTodayLine: false,
+    });
+
+    render(
+      <GanttWorkspace
+        tasks={tasksFixture}
+        selectedTaskId={null}
+        onSelectTask={vi.fn()}
+        onTaskActivate={vi.fn()}
+      />,
+    );
+
+    // Progress % badges on task bars & tree rows are hidden (only the toolbar overall meter remains)
+    const phaseBar = screen.getByRole('button', { name: /Phase 1: Foundation:/i });
+    expect(phaseBar).not.toHaveTextContent('50%');
+    expect(screen.getAllByText('50%')).toHaveLength(1);
+
+    // Hovering a bar does not show the floating tooltip when disabled
+    const ciBar = screen.getByRole('button', { name: /CI Pipeline:/i });
+    fireEvent.pointerEnter(ciBar, { pointerType: 'mouse' });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 });

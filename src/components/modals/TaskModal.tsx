@@ -19,7 +19,12 @@ import { buildDraftDefaultsForStatus } from '@/domain/taskViews';
 import { validateTaskDraft, type FieldValidationResult } from '@/domain/validation';
 import type { Task, TaskDraft, TaskStatus } from '@/types';
 import { cn } from '@/utils/cn';
-import { SPRING_SNAPPY, STUDIO_EASE } from '@/utils/motion';
+import {
+  clampProgressPercent,
+  PROGRESS_FILL_TRANSITION,
+  SPRING_SNAPPY,
+  STUDIO_EASE,
+} from '@/utils/motion';
 
 export interface TaskModalProps {
   isOpen: boolean;
@@ -150,29 +155,29 @@ export function TaskModal({
           : 'Configure schedule dates, status, and dependencies'
       }
       icon={
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-          <CalendarBlank weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+          <CalendarBlank weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
         </div>
       }
       maxWidth="lg"
       footer={
-        <div className="flex items-center justify-end gap-2.5">
-          <Button variant="secondary" size="md" onClick={onClose}>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <Button
             type="submit"
             form="task-modal-form"
             variant="primary"
-            size="md"
-            leftIcon={<Check weight="bold" className="w-4 h-4" />}
+            size="sm"
+            leftIcon={<Check weight="bold" className="w-3.5 h-3.5" />}
           >
             {task ? 'Save Changes' : 'Create Task'}
           </Button>
         </div>
       }
     >
-      <form id="task-modal-form" onSubmit={handleSubmit} className="p-6 sm:p-7 space-y-5">
+      <form id="task-modal-form" onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4">
         <AnimatePresence>
           {validationError && !validationError.valid && (
             <motion.div
@@ -223,7 +228,7 @@ export function TaskModal({
             placeholder="e.g., API Design & Schema Review"
             required
             autoFocus
-            className="w-full h-11 px-4 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
+            className="w-full h-10 px-3.5 text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition"
           />
         </div>
 
@@ -326,18 +331,18 @@ export function TaskModal({
               value={formData.end}
               onChange={handleDeadlineDateChange}
               required
-              className="w-full h-11 px-4 text-sm font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+              className="w-full h-10 px-3.5 text-[13px] font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
             />
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
               Appears as a diamond milestone marker on the timeline.
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label
                 htmlFor="task-start-date"
-                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
               >
                 Start Date
               </label>
@@ -348,13 +353,13 @@ export function TaskModal({
                 value={formData.start}
                 onChange={handleFieldChange}
                 required
-                className="w-full h-11 px-4 text-sm font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+                className="w-full h-10 px-3 text-[13px] font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
               />
             </div>
             <div>
               <label
                 htmlFor="task-end-date"
-                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
               >
                 End Date
               </label>
@@ -365,7 +370,7 @@ export function TaskModal({
                 value={formData.end}
                 onChange={handleFieldChange}
                 required
-                className="w-full h-11 px-4 text-sm font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
+                className="w-full h-10 px-3 text-[13px] font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 transition"
               />
             </div>
           </div>
@@ -384,9 +389,10 @@ export function TaskModal({
             </div>
             <div className="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
               <div
-                style={{ width: `${formData.progress}%` }}
+                style={{ transform: `translateX(${clampProgressPercent(formData.progress) - 100}%)` }}
                 className={cn(
-                  'h-full rounded-full transition-all',
+                  'h-full w-full rounded-full',
+                  PROGRESS_FILL_TRANSITION,
                   formData.progress === 100 ? 'bg-emerald-500' : 'bg-brand-500',
                 )}
               />

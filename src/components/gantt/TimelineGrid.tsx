@@ -10,6 +10,7 @@ export interface TimelineGridProps {
   rowHeight: number;
   selectedRowIndex: number;
   todayOffsetPx: number | null;
+  highlightWeekends?: boolean;
   onSelectTask: (taskId: number) => void;
   onHoverRowIndex: (rowIndex: number | null) => void;
 }
@@ -27,6 +28,7 @@ export const TimelineGrid = memo(function TimelineGrid({
   rowHeight,
   selectedRowIndex,
   todayOffsetPx,
+  highlightWeekends = true,
   onSelectTask,
   onHoverRowIndex,
 }: TimelineGridProps) {
@@ -35,8 +37,8 @@ export const TimelineGrid = memo(function TimelineGrid({
 
   // Render weekend / current period highlight strips only (tiny subset of columns)
   const accentColumns = useMemo(
-    () => columns.filter((col) => col.isWeekend || col.isCurrent),
-    [columns],
+    () => columns.filter((col) => col.isCurrent || (highlightWeekends && col.isWeekend)),
+    [columns, highlightWeekends],
   );
 
   // Horizontal zebra bands + row divider hairlines via single CSS background

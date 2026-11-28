@@ -4,7 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { AgendaReminderBanner } from '@/components/calendar/AgendaReminderBanner';
 import { useAgendaStore } from '@/store/agendaStore';
 import { useAuthStore } from '@/store/authStore';
-import type { AgendaItem } from '@/types';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { DEFAULT_PREFERENCES, type AgendaItem } from '@/types';
 
 const mockPlayChime = vi.fn((..._args: unknown[]) => true);
 
@@ -27,6 +28,7 @@ describe('AgendaReminderBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     window.sessionStorage.clear();
+    usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
     mockToggleDone.mockResolvedValue({ ok: true });
 
     useAuthStore.setState({
@@ -85,5 +87,41 @@ describe('AgendaReminderBanner', () => {
     await waitFor(() => {
       expect(mockToggleDone).toHaveBeenCalledWith('ag_live_1');
     });
+  });
+
+  it('does not show banners or play chimes when enableInAppReminders is disabled', () => {
+    usePreferencesStore.setState({ ...DEFAULT_PREFERENCES, enableInAppReminders: false });
+
+    const dueItem: AgendaItem = {
+      id: 'ag_live_muted',
+      title: 'Silent Event',
+      date: '2026-11-28',
+      time: '19:00',
+      note: '',
+      isDone: false,
+      reminderOffsetMinutes: 15,
+      timezone: 'Asia/Manila',
+      reminderTargetISO: new Date(Date.now() - 5_000).toISOString(),
+      cloudTaskName: null,
+      reminderSentAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    useAgendaStore.setState({
+      items: [dueItem],
+      telegramConfig: null,
+      loading: false,
+      toggleDone: mockToggleDone,
+    });
+
+    render(
+      <MemoryRouter>
+        <AgendaReminderBanner />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('in-app-reminder-ag_live_muted')).not.toBeInTheDocument();
+    expect(mockPlayChime).not.toHaveBeenCalled();
   });
 });

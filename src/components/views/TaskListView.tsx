@@ -34,7 +34,7 @@ import { formatDateRange, formatISODate, getTodayLocal } from '@/domain/timeline
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { FlatTask, Task, TaskStatus, WorkspaceBaseline } from '@/types';
 import { cn } from '@/utils/cn';
-import { STUDIO_EASE } from '@/utils/motion';
+import { clampProgressPercent, PROGRESS_FILL_TRANSITION, STUDIO_EASE } from '@/utils/motion';
 import { getUrgencyBadge, VIEW_STATUS_STYLES } from './viewStyles';
 
 const STATUS_FILTER_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
@@ -608,8 +608,14 @@ export const TaskListView = memo(function TaskListView({
                 {/* Progress bar */}
                 <div className="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.08] overflow-hidden">
                   <div
-                    style={{ width: `${task.progress}%` }}
-                    className={cn('h-full rounded-full', VIEW_STATUS_STYLES[status].progressBar)}
+                    style={{
+                      transform: `translateX(${clampProgressPercent(task.progress) - 100}%)`,
+                    }}
+                    className={cn(
+                      'h-full w-full rounded-full',
+                      PROGRESS_FILL_TRANSITION,
+                      VIEW_STATUS_STYLES[status].progressBar,
+                    )}
                   />
                 </div>
 
@@ -913,8 +919,14 @@ export const TaskListView = memo(function TaskListView({
                         ) : (
                           <div className="w-16 h-1.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
                             <div
-                              style={{ width: `${task.progress}%` }}
-                              className={cn('h-full rounded-full', VIEW_STATUS_STYLES[status].progressBar)}
+                              style={{
+                                transform: `translateX(${clampProgressPercent(task.progress) - 100}%)`,
+                              }}
+                              className={cn(
+                                'h-full w-full rounded-full',
+                                PROGRESS_FILL_TRANSITION,
+                                VIEW_STATUS_STYLES[status].progressBar,
+                              )}
                             />
                           </div>
                         )}

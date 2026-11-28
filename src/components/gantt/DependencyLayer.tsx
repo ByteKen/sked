@@ -25,6 +25,7 @@ export interface DependencyLayerProps {
   showDependencyLines: boolean;
   showSubtaskConnectors: boolean;
   showTaskDescriptions: boolean;
+  showProgressPercentages?: boolean;
   showBaseline?: boolean;
   showCriticalPath?: boolean;
   criticalEdgeKeys?: ReadonlySet<string>;
@@ -47,6 +48,7 @@ export const DependencyLayer = memo(function DependencyLayer({
   showDependencyLines,
   showSubtaskConnectors,
   showTaskDescriptions,
+  showProgressPercentages = true,
   showBaseline = false,
   showCriticalPath = false,
   criticalEdgeKeys,
@@ -71,7 +73,7 @@ export const DependencyLayer = memo(function DependencyLayer({
       const right = geom.left + geom.width;
 
       // Match TimelineBars.tsx rendered text containers (maxWidth: 250px outside, 240px top)
-      const progressPx = task.progress > 0 && !deadline ? 36 : 0;
+      const progressPx = showProgressPercentages && task.progress > 0 && !deadline ? 36 : 0;
       const baselineBadgePx = showBaseline ? 42 : 0;
       const outsideLabelWidth =
         labelPos === 'outside'
@@ -199,6 +201,7 @@ export const DependencyLayer = memo(function DependencyLayer({
     showDependencyLines,
     showSubtaskConnectors,
     showTaskDescriptions,
+    showProgressPercentages,
     showBaseline,
   ]);
 

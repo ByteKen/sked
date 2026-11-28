@@ -133,7 +133,66 @@ describe('CalendarView & AgendaItemModal', () => {
           title: 'Study Session',
           date: '2026-11-28',
           time: '19:00',
+          recurrence: 'none',
           reminderOffsetMinutes: 15,
+        }),
+      );
+    });
+  });
+
+  it('expands repeating agenda items across calendar days, toggles per-date completion, and saves repeating drafts', async () => {
+    const repeatingItem: AgendaItem = {
+      ...sampleAgendaItem,
+      id: 'ag_daily',
+      title: 'Daily Standup',
+      date: '2026-11-27',
+      time: '09:00',
+      recurrence: 'daily',
+      completedDates: ['2026-11-27'],
+    };
+
+    useAgendaStore.setState({
+      items: [repeatingItem],
+      telegramConfig: useAgendaStore.getState().telegramConfig,
+      loading: false,
+      saveItem: mockSaveItem,
+      toggleDone: mockToggleDone,
+      deleteItem: mockDeleteItem,
+    });
+
+    render(
+      <CalendarView
+        workspaces={sampleWorkspaces}
+        workspaceTasks={sampleTasks}
+        todayISO="2026-11-28"
+        onOpenTask={mockOpenTask}
+        onUpdateTaskStatus={mockUpdateTaskStatus}
+        onOpenSettings={mockOpenSettings}
+      />,
+    );
+
+    // Repeating daily item appears on Nov 28 even though series started on Nov 27
+    expect(screen.getByTestId('agenda-item-ag_daily')).toBeInTheDocument();
+    expect(screen.getByText('Daily')).toBeInTheDocument();
+
+    // Toggling completion passes the specific occurrenceDate ('2026-11-28')
+    fireEvent.click(screen.getByRole('button', { name: /Mark "Daily Standup" done/i }));
+    expect(mockToggleDone).toHaveBeenCalledWith('ag_daily', '2026-11-28');
+
+    // Creating a weekly repeating item from AgendaItemModal sends recurrence + optional end date
+    fireEvent.click(screen.getByRole('button', { name: /Add Agenda/i }));
+    fireEvent.change(screen.getByLabelText(/^Title$/i), { target: { value: 'Weekly Retro' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Weekly$/i }));
+    fireEvent.change(screen.getByLabelText(/End repeat/i), { target: { value: '2026-12-31' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add to Calendar/i }));
+
+    await waitFor(() => {
+      expect(mockSaveItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Weekly Retro',
+          date: '2026-11-28',
+          recurrence: 'weekly',
+          recurrenceEndDate: '2026-12-31',
         }),
       );
     });

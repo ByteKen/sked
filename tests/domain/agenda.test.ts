@@ -3,16 +3,21 @@ import {
   buildAgendaFiredKey,
   buildCalendarMonthGrid,
   collectWorkspaceDeadlinesForCalendar,
+  computeNextAgendaReminder,
   computeReminderTargetISO,
+  doesAgendaItemOccurOnDate,
+  expandAgendaItemsForDates,
   findDueAndNextInAppReminders,
   formatAgendaTelegramMessage,
   formatClockTime12h,
   getAgendaDeliveryStatus,
   getAgendaReminderHeading,
+  getNextAgendaOccurrenceDate,
   isDeferredBeyondCloudTaskWindow,
   isWithinCloudTaskWindow,
   localDateTimeToUtcMs,
   sanitizeAgendaItems,
+  toggleAgendaItemCompletion,
   validateAgendaDraft,
 } from '@/domain/agenda';
 import { parseBotCallback } from '@/domain/telegramBot';
@@ -254,5 +259,110 @@ describe('agenda & calendar pure domain policy', () => {
     const second = findDueAndNextInAppReminders([item, futureItem], fired, nowMs);
     expect(second.due).toEqual([]);
     expect(second.nextDelayMs).toBe(15 * 60_000);
+  });
+
+  it('evaluates daily, weekday, weekly, monthly (month-end clamped), and yearly repeating agenda items cleanly', () => {
+    // Weekdays (Mon-Fri): 2026-11-28 is Saturday -> skips Sat/Sun and lands on Monday 2026-11-30
+    expect(
+      doesAgendaItemOccurOnDate({ date: '2026-11-28', recurrence: 'weekdays' }, '2026-11-28'),
+    ).toBe(false);
+    expect(
+      doesAgendaItemOccurOnDate({ date: '2026-11-28', recurrence: 'weekdays' }, '2026-11-30'),
+    ).toBe(true);
+    expect(
+      getNextAgendaOccurrenceDate({ date: '2026-11-28', recurrence: 'weekdays' }, '2026-11-28'),
+    ).toBe('2026-11-30');
+
+    // Monthly month-end clamping: Jan 31 -> Feb 28 (2026 non-leap) -> Mar 31 -> Apr 30
+    const monthly = { date: '2026-01-31', recurrence: 'monthly' as const };
+    expect(doesAgendaItemOccurOnDate(monthly, '2026-02-28')).toBe(true);
+    expect(doesAgendaItemOccurOnDate(monthly, '2026-03-31')).toBe(true);
+    expect(doesAgendaItemOccurOnDate(monthly, '2026-04-30')).toBe(true);
+    expect(getNextAgendaOccurrenceDate(monthly, '2026-01-31', false)).toBe('2026-02-28');
+    expect(getNextAgendaOccurrenceDate(monthly, '2026-02-28', false)).toBe('2026-03-31');
+
+    // End date stops recurrence cleanly
+    const bounded = {
+      date: '2026-11-28',
+      recurrence: 'daily' as const,
+      recurrenceEndDate: '2026-11-30',
+    };
+    expect(doesAgendaItemOccurOnDate(bounded, '2026-11-30')).toBe(true);
+    expect(doesAgendaItemOccurOnDate(bounded, '2026-12-01')).toBe(false);
+    expect(getNextAgendaOccurrenceDate(bounded, '2026-11-30', false)).toBeNull();
+
+    // Validation rejects repeat end date before start date
+    expect(
+      validateAgendaDraft({
+        title: 'Daily Standup',
+        date: '2026-11-28',
+        recurrence: 'daily',
+        recurrenceEndDate: '2026-11-20',
+        reminderOffsetMinutes: 15,
+      }).valid,
+    ).toBe(false);
+
+    // Repeating item per-date completion, next Cloud Task chaining, in-app alerts, and agd callback parsing
+    const dailyItem: AgendaItem = {
+      id: 'ag_rep1',
+      title: 'Standup',
+      date: '2026-11-28',
+      time: '09:00',
+      isDone: false,
+      recurrence: 'daily',
+      completedDates: [],
+      reminderOffsetMinutes: 15,
+      timezone: 'Asia/Manila',
+      reminderTargetISO: '2026-11-28T00:45:00.000Z', // 8:45 AM Manila
+      cloudTaskName: null,
+      reminderSentAt: null,
+      createdAt: '2026-11-28T00:00:00.000Z',
+      updatedAt: '2026-11-28T00:00:00.000Z',
+    };
+
+    const doneToday = toggleAgendaItemCompletion(dailyItem, '2026-11-28', '2026-11-28T01:00:00.000Z');
+    expect(doneToday.isDone).toBe(false);
+    expect(doneToday.completedDates).toEqual(['2026-11-28']);
+
+    // Next reminder automatically skips completed 2026-11-28 and lands on 2026-11-29 8:45 AM Manila
+    const nextRem = computeNextAgendaReminder({
+      date: doneToday.date,
+      time: doneToday.time,
+      recurrence: doneToday.recurrence,
+      completedDates: doneToday.completedDates,
+      reminderOffsetMinutes: doneToday.reminderOffsetMinutes,
+      timezone: doneToday.timezone,
+      nowMs: Date.parse('2026-11-28T00:30:00.000Z'),
+    });
+    expect(nextRem).toEqual({
+      occurrenceDate: '2026-11-29',
+      reminderTargetISO: '2026-11-29T00:45:00.000Z',
+    });
+
+    // Calendar date expansion marks Nov 28 done and Nov 29 open
+    const expanded = expandAgendaItemsForDates([doneToday], ['2026-11-28', '2026-11-29']);
+    expect(expanded.get('2026-11-28')?.[0]?.isDone).toBe(true);
+    expect(expanded.get('2026-11-29')?.[0]?.isDone).toBe(false);
+
+    // Dynamic in-app scheduler fires on Nov 29 at 8:45:10 AM Manila even without modifying stored target
+    const inApp = findDueAndNextInAppReminders(
+      [doneToday],
+      new Set(),
+      Date.parse('2026-11-29T00:45:10.000Z'),
+    );
+    expect(inApp.due).toHaveLength(1);
+    expect(inApp.due[0]?.date).toBe('2026-11-29');
+
+    // Telegram callback with occurrence date parses cleanly
+    expect(parseBotCallback('agd:ag_rep1:2026-11-28')).toEqual({
+      type: 'agenda_done',
+      itemId: 'ag_rep1',
+      occurrenceDate: '2026-11-28',
+    });
+
+    // Telegram message includes repeat summary
+    expect(formatAgendaTelegramMessage(dailyItem, 'https://skedspace.vercel.app', '2026-11-29')).toContain(
+      'Repeats every day',
+    );
   });
 });

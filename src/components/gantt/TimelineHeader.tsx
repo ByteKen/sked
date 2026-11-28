@@ -7,6 +7,7 @@ export interface TimelineHeaderProps {
   headerHeight: number;
   todayOffsetPx: number | null;
   showMonthMarkers: boolean;
+  highlightWeekends?: boolean;
 }
 
 export const TimelineHeader = memo(function TimelineHeader({
@@ -14,6 +15,7 @@ export const TimelineHeader = memo(function TimelineHeader({
   headerHeight,
   todayOffsetPx,
   showMonthMarkers,
+  highlightWeekends = true,
 }: TimelineHeaderProps) {
   return (
     <div
@@ -41,7 +43,7 @@ export const TimelineHeader = memo(function TimelineHeader({
               'shrink-0 relative flex flex-col items-center justify-center border-r border-slate-200/90 dark:border-white/[0.06] px-0.5',
               col.isCurrent
                 ? 'bg-brand-100/80 dark:bg-brand-500/18'
-                : col.isWeekend
+                : highlightWeekends && col.isWeekend
                   ? 'bg-slate-200/40 dark:bg-white/[0.02]'
                   : 'bg-transparent',
             )}
@@ -57,7 +59,7 @@ export const TimelineHeader = memo(function TimelineHeader({
                 isNewMonth && 'mt-1.5',
                 col.isCurrent
                   ? 'text-brand-700 dark:text-brand-200'
-                  : col.isWeekend
+                  : highlightWeekends && col.isWeekend
                     ? 'text-slate-400 dark:text-slate-500'
                     : 'text-slate-700 dark:text-slate-200',
               )}

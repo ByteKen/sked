@@ -77,12 +77,16 @@ import { useAuthStore } from '@/store/authStore';
 describe('authStore (open access & safe account deletion)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     authCallback = null;
     mockAuth.currentUser = null;
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
       loading: true,
+      signingIn: false,
+      authChecked: false,
+      hasSessionHint: false,
       error: null,
       cancelled: false,
     });
@@ -219,5 +223,50 @@ describe('authStore (open access & safe account deletion)', () => {
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/at least 2 characters/i);
     expect(mockSaveDisplayNameInFirestore).not.toHaveBeenCalled();
+  });
+
+  it('tracks authChecked and persists sked_session_hint for instant skeleton reload without hiding LandingPage during login', async () => {
+    useAuthStore.getState().initAuth();
+    expect(useAuthStore.getState().authChecked).toBe(false);
+    expect(localStorage.getItem('sked_session_hint')).toBeNull();
+
+    // First auth check resolves signed-out -> authChecked flips true, hint stays cleared
+    authCallback?.(null);
+    expect(useAuthStore.getState().authChecked).toBe(true);
+    expect(useAuthStore.getState().hasSessionHint).toBe(false);
+    expect(localStorage.getItem('sked_session_hint')).toBeNull();
+
+    // Interactive login sets signingIn=true while keeping authChecked=true so LandingPage stays mounted
+    mockSignInWithPopup.mockImplementationOnce(async () => {
+      expect(useAuthStore.getState().signingIn).toBe(true);
+      expect(useAuthStore.getState().loading).toBe(false);
+      expect(useAuthStore.getState().authChecked).toBe(true);
+      return { user: { uid: 'uid-hint', email: 'hint@example.com' } };
+    });
+    await useAuthStore.getState().login();
+    expect(useAuthStore.getState().signingIn).toBe(false);
+
+    // Auth state fires with signed-in user -> writes non-sensitive session hint
+    authCallback?.({
+      uid: 'uid-hint',
+      email: 'hint@example.com',
+      displayName: 'Hint User',
+      photoURL: null,
+    });
+    expect(useAuthStore.getState().hasSessionHint).toBe(true);
+    expect(localStorage.getItem('sked_session_hint')).toBe('1');
+
+    // Explicit logout clears session hint and signingIn immediately
+    mockSignOut.mockResolvedValueOnce(undefined);
+    await useAuthStore.getState().logout();
+    expect(useAuthStore.getState().hasSessionHint).toBe(false);
+    expect(useAuthStore.getState().signingIn).toBe(false);
+    expect(localStorage.getItem('sked_session_hint')).toBeNull();
+
+    // cancelSigningIn resets a stalled popup without setting an error
+    useAuthStore.setState({ signingIn: true });
+    useAuthStore.getState().cancelSigningIn();
+    expect(useAuthStore.getState().signingIn).toBe(false);
+    expect(useAuthStore.getState().error).toBeNull();
   });
 });

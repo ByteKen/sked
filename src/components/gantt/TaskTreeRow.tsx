@@ -23,6 +23,7 @@ export interface TaskTreeRowProps {
   readOnly: boolean;
   compact: boolean;
   showTaskDescriptions: boolean;
+  showProgressPercentages?: boolean;
   onSelect: (taskId: number) => void;
   onHoverRowIndex: (rowIndex: number | null) => void;
   onToggleCollapse: (taskId: number) => void;
@@ -41,6 +42,7 @@ export const TaskTreeRow = memo(function TaskTreeRow({
   readOnly,
   compact,
   showTaskDescriptions,
+  showProgressPercentages = true,
   onSelect,
   onHoverRowIndex,
   onToggleCollapse,
@@ -169,7 +171,7 @@ export const TaskTreeRow = memo(function TaskTreeRow({
               <NoteBlank weight="duotone" className="w-3.5 h-3.5" />
             </span>
           )}
-          {task.hasChildren && (
+          {showProgressPercentages && task.hasChildren && (
             <span
               className={cn(
                 'font-mono text-[10px] font-bold px-1.5 py-[1px] rounded-md shrink-0 tabular-nums',

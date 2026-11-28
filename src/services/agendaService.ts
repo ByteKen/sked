@@ -66,8 +66,15 @@ export function upsertAgendaItemViaApi(item: AgendaItemDraft): Promise<AgendaMan
   return postAgendaManage({ action: 'upsert', item });
 }
 
-export function toggleAgendaDoneViaApi(itemId: string): Promise<AgendaManageResponse> {
-  return postAgendaManage({ action: 'toggle-done', itemId });
+export function toggleAgendaDoneViaApi(
+  itemId: string,
+  occurrenceDate?: string,
+): Promise<AgendaManageResponse> {
+  return postAgendaManage({
+    action: 'toggle-done',
+    itemId,
+    ...(occurrenceDate ? { occurrenceDate } : {}),
+  });
 }
 
 export function deleteAgendaItemViaApi(itemId: string): Promise<AgendaManageResponse> {

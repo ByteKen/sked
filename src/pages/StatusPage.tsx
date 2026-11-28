@@ -15,6 +15,7 @@ import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { StatusPageSkeleton } from '@/components/skeletons/PageSkeletons';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import {
   formatQuotaLimitShort,
@@ -58,7 +59,7 @@ const LEVEL_STYLES: Record<
       'bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-500/15 dark:text-rose-300 dark:border-rose-400/25',
     dot: 'bg-rose-500',
     bar: 'bg-rose-500 dark:bg-rose-400',
-    headline: 'Approaching Spark Limit',
+    headline: 'Approaching Usage Limit',
   },
 };
 
@@ -215,7 +216,7 @@ export function StatusPage() {
                 </span>
               </h1>
               <p className="mt-2.5 text-sm text-slate-600 dark:text-slate-400 max-w-xl">
-                Live shared Cloud Firestore Spark-plan daily capacity across Sked and service
+                Live shared Cloud Firestore daily capacity across Sked and service
                 health. Daily limits reset at midnight Pacific Time.
               </p>
             </div>
@@ -300,22 +301,9 @@ export function StatusPage() {
           )}
 
           {/* Loading Skeleton */}
-          {loading && !status && (
-            <div className="rounded-2xl border border-slate-200/90 dark:border-white/[0.09] bg-white/90 dark:bg-surface-dark/90 p-6 sm:p-8 space-y-6 animate-pulse">
-              <div className="h-5 w-44 rounded bg-slate-200 dark:bg-white/10" />
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="space-y-2.5 pt-4 border-t border-slate-100 dark:border-white/[0.06]">
-                  <div className="flex justify-between">
-                    <div className="h-4 w-24 rounded bg-slate-200 dark:bg-white/10" />
-                    <div className="h-4 w-32 rounded bg-slate-200 dark:bg-white/10" />
-                  </div>
-                  <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-white/10" />
-                </div>
-              ))}
-            </div>
-          )}
+          {loading && !status && <StatusPageSkeleton />}
 
-          {/* Project Quotas Card (Firebase Spark Plan) */}
+          {/* Project Quotas Card (Firebase Plan) */}
           {status && (
             <>
               <motion.section
@@ -335,9 +323,6 @@ export function StatusPage() {
                         </h2>
                         <span className="font-mono text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-white/[0.08] dark:text-slate-300">
                           Cloud Firestore · {status.databaseId}
-                        </span>
-                        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300">
-                          Spark Plan
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -431,7 +416,7 @@ export function StatusPage() {
                     );
                   })}
 
-                  {/* Database + Index Storage Row (1 GiB Spark total cap) */}
+                  {/* Database + Index Storage Row (1 GiB total cap) */}
                   {status.storage && (
                     <div
                       data-testid="quota-row-storage"
@@ -504,7 +489,7 @@ export function StatusPage() {
 
                 <div className="px-6 py-3.5 bg-slate-50/80 dark:bg-white/[0.02] border-t border-slate-200/80 dark:border-white/[0.07] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                   <span>
-                    Spark monthly outbound bandwidth allowance:{' '}
+                    Monthly outbound bandwidth allowance:{' '}
                     <strong className="text-slate-700 dark:text-slate-300">10 GiB / month</strong>
                   </span>
                   <span className="font-mono">

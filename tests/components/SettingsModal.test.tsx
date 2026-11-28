@@ -2,6 +2,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsModal } from '@/components/modals/SettingsModal';
+import { applyAnimationsToDocument, applyThemeToDocument, usePreferencesStore } from '@/store/preferencesStore';
+import { DEFAULT_PREFERENCES } from '@/types';
 
 const { mockUpdateDisplayName } = vi.hoisted(() => ({
   mockUpdateDisplayName: vi.fn(),
@@ -36,6 +38,9 @@ vi.mock('@/store/workspaceStore', () => ({
 describe('SettingsModal tabbed layout & Profile display name', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    usePreferencesStore.setState({ ...DEFAULT_PREFERENCES });
+    applyThemeToDocument(DEFAULT_PREFERENCES.theme);
+    applyAnimationsToDocument(DEFAULT_PREFERENCES.enableAnimations);
     mockUpdateDisplayName.mockResolvedValue({
       ok: true,
       name: 'Ken Studio',
@@ -99,5 +104,53 @@ describe('SettingsModal tabbed layout & Profile display name', () => {
     await waitFor(() => {
       expect(mockUpdateDisplayName).toHaveBeenCalledWith('Ken Studio');
     });
+  });
+
+  it('exposes all user display toggles in Display tab, updates store & DOM motion state, and resets defaults', async () => {
+    render(
+      <MemoryRouter>
+        <SettingsModal isOpen onClose={vi.fn()} initialTab="display" />
+      </MemoryRouter>,
+    );
+
+    const toggleCases: Array<{
+      ariaName: RegExp;
+      key: keyof typeof DEFAULT_PREFERENCES;
+    }> = [
+      { ariaName: /toggle animations and motion/i, key: 'enableAnimations' },
+      { ariaName: /toggle rounded deadline bars/i, key: 'useRoundedSubtasks' },
+      { ariaName: /toggle bar hover tooltips/i, key: 'showBarTooltips' },
+      { ariaName: /toggle dependency arrows/i, key: 'showDependencyLines' },
+      { ariaName: /toggle subtask connectors/i, key: 'showSubtaskConnectors' },
+      { ariaName: /toggle task descriptions on timeline/i, key: 'showTaskDescriptions' },
+      { ariaName: /toggle progress percentages/i, key: 'showProgressPercentages' },
+      { ariaName: /toggle today marker line/i, key: 'showTodayLine' },
+      { ariaName: /toggle weekend shading/i, key: 'highlightWeekends' },
+      { ariaName: /toggle critical path highlight/i, key: 'showCriticalPathByDefault' },
+      { ariaName: /toggle auto-cascade dependencies/i, key: 'autoCascadeDependencies' },
+      { ariaName: /toggle in-app reminder banners/i, key: 'enableInAppReminders' },
+      { ariaName: /toggle reminder alert chime/i, key: 'reminderSoundEnabled' },
+    ];
+
+    for (const { ariaName, key } of toggleCases) {
+      const initial = Boolean(usePreferencesStore.getState()[key]);
+      const sw = screen.getByRole('switch', { name: ariaName });
+      expect(sw).toHaveAttribute('aria-checked', String(initial));
+      fireEvent.click(sw);
+      expect(usePreferencesStore.getState()[key]).toBe(!initial);
+    }
+
+    // Disabling animations sets data-reduce-motion="true" on <html>
+    expect(document.documentElement.getAttribute('data-reduce-motion')).toBe('true');
+
+    // Clicking "Reset defaults" restores all preferences and removes reduced-motion attribute
+    fireEvent.click(screen.getByRole('button', { name: /reset defaults/i }));
+    await waitFor(() => {
+      expect(usePreferencesStore.getState().enableAnimations).toBe(true);
+      expect(usePreferencesStore.getState().showTodayLine).toBe(true);
+      expect(usePreferencesStore.getState().showCriticalPathByDefault).toBe(false);
+      expect(usePreferencesStore.getState().enableInAppReminders).toBe(true);
+    });
+    expect(document.documentElement.getAttribute('data-reduce-motion')).toBeNull();
   });
 });

@@ -142,6 +142,37 @@
   animation: toast-progress linear forwards;
 }
 
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.72) 25%,
+    rgba(241, 245, 249, 0.96) 50%,
+    rgba(226, 232, 240, 0.72) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.65s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.055) 25%,
+    rgba(255, 255, 255, 0.105) 50%,
+    rgba(255, 255, 255, 0.055) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.65s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -150,4 +181,13 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+:root[data-reduce-motion='true'] *,
+:root[data-reduce-motion='true'] *::before,
+:root[data-reduce-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }

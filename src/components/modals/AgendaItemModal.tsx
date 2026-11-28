@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
+  ArrowsClockwise,
   BellRinging,
   CalendarBlank,
   Clock,
@@ -12,12 +13,19 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import {
-  computeReminderTargetISO,
+  AGENDA_RECURRENCE_LABELS,
+  computeNextAgendaReminder,
   formatClockTime12h,
   formatUtcIsoInTimezone,
+  normalizeAgendaRecurrence,
   validateAgendaDraft,
 } from '@/domain/agenda';
-import type { AgendaItem, AgendaItemDraft, AgendaReminderOffset } from '@/types';
+import type {
+  AgendaItem,
+  AgendaItemDraft,
+  AgendaRecurrenceFrequency,
+  AgendaReminderOffset,
+} from '@/types';
 import { cn } from '@/utils/cn';
 import { playReminderChime } from '@/utils/reminderSound';
 
@@ -27,6 +35,15 @@ const REMINDER_OPTIONS: Array<{ value: AgendaReminderOffset | null; label: strin
   { value: 15, label: '15m before' },
   { value: 30, label: '30m before' },
   { value: 60, label: '1h before' },
+];
+
+const RECURRENCE_OPTIONS: Array<{ value: AgendaRecurrenceFrequency; label: string }> = [
+  { value: 'none', label: 'Never' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'yearly', label: 'Yearly' },
 ];
 
 export interface AgendaItemModalProps {
@@ -57,6 +74,8 @@ export function AgendaItemModal({
   const [title, setTitle] = useState('');
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState('');
+  const [recurrence, setRecurrence] = useState<AgendaRecurrenceFrequency>('none');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   const [reminderOffset, setReminderOffset] = useState<AgendaReminderOffset | null>(15);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -69,12 +88,16 @@ export function AgendaItemModal({
       setTitle(editingItem.title);
       setDate(editingItem.date);
       setTime(editingItem.time ?? '');
+      setRecurrence(normalizeAgendaRecurrence(editingItem.recurrence));
+      setRecurrenceEndDate(editingItem.recurrenceEndDate ?? '');
       setReminderOffset(editingItem.reminderOffsetMinutes);
       setNote(editingItem.note ?? '');
     } else {
       setTitle('');
       setDate(initialDate);
       setTime('');
+      setRecurrence('none');
+      setRecurrenceEndDate('');
       setReminderOffset(telegramConnected ? 15 : null);
       setNote('');
     }
@@ -85,16 +108,30 @@ export function AgendaItemModal({
 
   const previewAlertTime = useMemo(() => {
     if (reminderOffset === null || !date) return null;
-    const targetISO = computeReminderTargetISO({
+    const tz = editingItem?.timezone || defaultTimezone;
+    const next = computeNextAgendaReminder({
       date,
       time: time || null,
+      recurrence,
+      recurrenceEndDate: recurrence !== 'none' && recurrenceEndDate ? recurrenceEndDate : null,
+      completedDates: editingItem?.completedDates,
       reminderOffsetMinutes: reminderOffset,
-      timezone: editingItem?.timezone || defaultTimezone,
+      timezone: tz,
       defaultReminderHour,
     });
-    if (!targetISO) return null;
-    return formatUtcIsoInTimezone(targetISO, editingItem?.timezone || defaultTimezone);
-  }, [reminderOffset, date, time, editingItem?.timezone, defaultTimezone, defaultReminderHour]);
+    if (!next) return null;
+    return formatUtcIsoInTimezone(next.reminderTargetISO, tz);
+  }, [
+    reminderOffset,
+    date,
+    time,
+    recurrence,
+    recurrenceEndDate,
+    editingItem?.timezone,
+    editingItem?.completedDates,
+    defaultTimezone,
+    defaultReminderHour,
+  ]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -103,6 +140,8 @@ export function AgendaItemModal({
       title: title.trim(),
       date,
       time: time || null,
+      recurrence,
+      recurrenceEndDate: recurrence !== 'none' && recurrenceEndDate ? recurrenceEndDate : null,
       note: note.trim() || undefined,
       reminderOffsetMinutes: reminderOffset,
       timezone: editingItem?.timezone || defaultTimezone,
@@ -140,11 +179,11 @@ export function AgendaItemModal({
       isOpen={isOpen}
       onClose={onClose}
       title={editingItem ? 'Edit Personal Agenda' : 'New Personal Agenda'}
-      description="Schedule a personal reminder or event alongside your project deadlines"
+      description="Schedule a personal reminder, event, or repeating routine"
       maxWidth="md"
       icon={
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-          <CalendarBlank weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+          <CalendarBlank weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
         </div>
       }
       footer={
@@ -157,7 +196,7 @@ export function AgendaItemModal({
               disabled={saving}
               onClick={() => void handleDelete()}
               className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/15"
-              leftIcon={<Trash weight="duotone" className="w-4 h-4" />}
+              leftIcon={<Trash weight="duotone" className="w-3.5 h-3.5" />}
             >
               Delete
             </Button>
@@ -166,15 +205,15 @@ export function AgendaItemModal({
               {defaultTimezone}
             </span>
           )}
-          <div className="flex items-center gap-2.5 ml-auto">
-            <Button variant="secondary" size="md" onClick={onClose} disabled={saving || deleting}>
+          <div className="flex items-center gap-2 ml-auto">
+            <Button variant="secondary" size="sm" onClick={onClose} disabled={saving || deleting}>
               Cancel
             </Button>
             <Button
               type="submit"
               form="agenda-item-form"
               variant="primary"
-              size="md"
+              size="sm"
               loading={saving}
               disabled={deleting}
             >
@@ -184,7 +223,7 @@ export function AgendaItemModal({
         </div>
       }
     >
-      <form id="agenda-item-form" onSubmit={(e) => void handleSubmit(e)} className="p-6 sm:p-7 space-y-5">
+      <form id="agenda-item-form" onSubmit={(e) => void handleSubmit(e)} className="p-5 sm:p-6 space-y-4">
         <div>
           <label
             htmlFor="agenda-title-input"
@@ -200,20 +239,20 @@ export function AgendaItemModal({
               setTitle(e.target.value);
               setError(null);
             }}
-            placeholder="e.g., Group demo presentation, Study session"
+            placeholder="e.g., Daily standup, Weekly sync, Gym"
             autoFocus
             maxLength={100}
-            className="w-full h-11 px-3.5 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full h-10 px-3.5 text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label
               htmlFor="agenda-date-input"
               className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
             >
-              Date
+              {recurrence !== 'none' ? 'Starts on' : 'Date'}
             </label>
             <input
               id="agenda-date-input"
@@ -223,7 +262,7 @@ export function AgendaItemModal({
                 setDate(e.target.value);
                 setError(null);
               }}
-              className="w-full h-11 px-3.5 text-sm font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full h-10 px-3 text-[13px] font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
           </div>
 
@@ -249,7 +288,7 @@ export function AgendaItemModal({
             <div className="relative">
               <Clock
                 weight="duotone"
-                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"
               />
               <input
                 id="agenda-time-input"
@@ -259,7 +298,7 @@ export function AgendaItemModal({
                   setTime(e.target.value);
                   setError(null);
                 }}
-                className="w-full h-11 pl-10 pr-3.5 text-sm font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full h-10 pl-9 pr-3 text-[13px] font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             {time && (
@@ -268,6 +307,83 @@ export function AgendaItemModal({
               </p>
             )}
           </div>
+        </div>
+
+        {/* Repeat Frequency */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <ArrowsClockwise
+                weight="duotone"
+                className="w-4 h-4 text-brand-600 dark:text-brand-400"
+              />
+              Repeat
+            </span>
+            {recurrence !== 'none' && (
+              <span className="text-[11px] font-medium text-brand-600 dark:text-brand-400">
+                {AGENDA_RECURRENCE_LABELS[recurrence]}
+              </span>
+            )}
+          </div>
+
+          <div role="group" aria-label="Repeat frequency" className="flex flex-wrap gap-1.5">
+            {RECURRENCE_OPTIONS.map((opt) => {
+              const active = recurrence === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setRecurrence(opt.value);
+                    if (opt.value === 'none') setRecurrenceEndDate('');
+                    setError(null);
+                  }}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer',
+                    active
+                      ? 'bg-brand-600 text-white border-brand-600 shadow-surface-sm'
+                      : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-brand-400',
+                  )}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {recurrence !== 'none' && (
+            <div className="flex items-center justify-between gap-3 pt-0.5">
+              <label
+                htmlFor="agenda-repeat-end-input"
+                className="text-xs font-medium text-slate-600 dark:text-slate-400 shrink-0"
+              >
+                End repeat <span className="text-slate-400">(optional)</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <input
+                  id="agenda-repeat-end-input"
+                  type="date"
+                  min={date}
+                  value={recurrenceEndDate}
+                  onChange={(e) => {
+                    setRecurrenceEndDate(e.target.value);
+                    setError(null);
+                  }}
+                  className="h-9 px-2.5 text-xs font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+                {recurrenceEndDate && (
+                  <button
+                    type="button"
+                    onClick={() => setRecurrenceEndDate('')}
+                    aria-label="Clear repeat end date"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-white/[0.08] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" weight="bold" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Telegram Exact-Time Reminder */}
@@ -301,7 +417,7 @@ export function AgendaItemModal({
                   type="button"
                   onClick={() => setReminderOffset(opt.value)}
                   className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer',
+                    'px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer',
                     active
                       ? 'bg-brand-600 text-white border-brand-600 shadow-surface-sm'
                       : 'bg-slate-50 dark:bg-white/[0.04] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-brand-400',
@@ -314,7 +430,7 @@ export function AgendaItemModal({
           </div>
 
           {reminderOffset !== null && (
-            <div className="mt-2.5 rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/80 dark:bg-white/[0.03] px-3.5 py-2.5 text-xs">
+            <div className="mt-2.5 rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/80 dark:bg-white/[0.03] px-3 py-2.5 text-xs">
               {telegramConnected ? (
                 <p className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                   <PaperPlaneTilt
@@ -322,7 +438,9 @@ export function AgendaItemModal({
                     className="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0"
                   />
                   <span>
-                    One-shot Telegram alert scheduled for{' '}
+                    {recurrence !== 'none'
+                      ? `Repeats ${AGENDA_RECURRENCE_LABELS[recurrence].toLowerCase()} · next Telegram alert at `
+                      : 'One-shot Telegram alert scheduled for '}
                     <strong className="font-mono text-slate-900 dark:text-white">
                       {previewAlertTime || 'selected date'}
                     </strong>
@@ -366,7 +484,7 @@ export function AgendaItemModal({
           </label>
           <textarea
             id="agenda-note-input"
-            rows={3}
+            rows={2}
             value={note}
             onChange={(e) => {
               setNote(e.target.value);
@@ -374,7 +492,7 @@ export function AgendaItemModal({
             }}
             maxLength={500}
             placeholder="Room link, checklist, or extra context..."
-            className="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500"
+            className="w-full px-3 py-2 text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
         </div>
 

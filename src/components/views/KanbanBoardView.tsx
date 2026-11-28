@@ -27,7 +27,7 @@ import { formatDateRange, formatISODate, getTodayLocal } from '@/domain/timeline
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import type { FlatTask, Task, TaskStatus, WorkspaceBaseline } from '@/types';
 import { cn } from '@/utils/cn';
-import { STUDIO_EASE } from '@/utils/motion';
+import { clampProgressPercent, PROGRESS_FILL_TRANSITION, STUDIO_EASE } from '@/utils/motion';
 import { getUrgencyBadge, VIEW_STATUS_STYLES } from './viewStyles';
 
 export interface KanbanBoardViewProps {
@@ -278,8 +278,14 @@ export const KanbanBoardView = memo(function KanbanBoardView({
           <div className="mt-2.5 flex items-center gap-2">
             <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-white/[0.08] overflow-hidden">
               <div
-                style={{ width: `${task.progress}%` }}
-                className={cn('h-full rounded-full', VIEW_STATUS_STYLES[status].progressBar)}
+                style={{
+                  transform: `translateX(${clampProgressPercent(task.progress) - 100}%)`,
+                }}
+                className={cn(
+                  'h-full w-full rounded-full',
+                  PROGRESS_FILL_TRANSITION,
+                  VIEW_STATUS_STYLES[status].progressBar,
+                )}
               />
             </div>
             <span className="font-mono text-[10px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">

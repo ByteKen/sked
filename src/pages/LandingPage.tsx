@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -42,7 +42,6 @@ const CAPABILITIES = [
 ];
 
 const TRUST_HIGHLIGHTS = [
-  { icon: GlobeHemisphereWest, text: 'Open to any Google account — zero domain restrictions' },
   { icon: Kanban, text: 'Switch freely between Gantt timeline, Kanban board, and task list' },
   {
     icon: TelegramLogo,
@@ -52,12 +51,51 @@ const TRUST_HIGHLIGHTS = [
 ];
 
 export function LandingPage() {
-  const { login, error, cancelled, loading, clearError } = useAuthStore();
+  const { login, cancelSigningIn, error, cancelled, signingIn, clearError } = useAuthStore();
   const [mobileSignInOnly, setMobileSignInOnly] = useState(false);
   const [signInRevealCount, setSignInRevealCount] = useState(0);
   const [overviewRevealCount, setOverviewRevealCount] = useState(0);
+  const [showSignInRetryHint, setShowSignInRetryHint] = useState(false);
+
+  // Guard against Chrome COOP silently swallowing Google popup close events so the
+  // Continue with Google button can never get stuck permanently on "Signing in...".
+  useEffect(() => {
+    if (!signingIn) {
+      return;
+    }
+
+    const hintTimer = window.setTimeout(() => {
+      setShowSignInRetryHint(true);
+    }, 2500);
+
+    let focusRecoveryTimer: number | null = null;
+    const handleWindowFocus = () => {
+      if (focusRecoveryTimer !== null) window.clearTimeout(focusRecoveryTimer);
+      focusRecoveryTimer = window.setTimeout(() => {
+        cancelSigningIn();
+      }, 2500);
+    };
+    const handleWindowBlur = () => {
+      if (focusRecoveryTimer !== null) {
+        window.clearTimeout(focusRecoveryTimer);
+        focusRecoveryTimer = null;
+      }
+    };
+
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      window.clearTimeout(hintTimer);
+      if (focusRecoveryTimer !== null) window.clearTimeout(focusRecoveryTimer);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleWindowBlur);
+      setShowSignInRetryHint(false);
+    };
+  }, [signingIn, cancelSigningIn]);
 
   const handleGoogleSignIn = async () => {
+    setShowSignInRetryHint(false);
     clearError();
     try {
       await login();
@@ -103,11 +141,6 @@ export function LandingPage() {
           </button>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden lg:inline-flex items-center gap-2 text-xs sm:text-[13px] font-medium text-slate-500 dark:text-slate-400">
-              <GlobeHemisphereWest className="w-[18px] h-[18px] text-brand-500" weight="duotone" />
-              Open to everyone
-            </span>
-
             {/* Mobile/Tablet Focused Sign-In Toggle */}
             <motion.button
               type="button"
@@ -402,7 +435,7 @@ export function LandingPage() {
                       whileTap={{ scale: 0.985 }}
                       transition={SPRING_SNAPPY}
                       onClick={() => void handleGoogleSignIn()}
-                      disabled={loading}
+                      disabled={signingIn}
                       className="group relative overflow-hidden w-full inline-flex items-center justify-center gap-3 h-12 px-6 rounded-xl bg-brand-600 hover:bg-brand-500 dark:bg-brand-500 dark:hover:bg-brand-400 text-white text-sm font-semibold shadow-brand-glow transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-surface-dark"
                     >
                       {/* Subtle light sheen sweep across the CTA on reveal */}
@@ -413,7 +446,7 @@ export function LandingPage() {
                         transition={{ duration: 0.9, delay: 0.32, ease: STUDIO_EASE }}
                         className="pointer-events-none absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent"
                       />
-                      {loading ? (
+                      {signingIn ? (
                         <>
                           <CircleNotch className="w-4 h-4 animate-spin" weight="bold" />
                           <span>Signing in...</span>
@@ -448,6 +481,17 @@ export function LandingPage() {
                         </>
                       )}
                     </motion.button>
+                    {signingIn && showSignInRetryHint && (
+                      <div className="mt-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={cancelSigningIn}
+                          className="text-xs font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400 underline underline-offset-2 cursor-pointer transition-colors"
+                        >
+                          Popup didn&apos;t appear? Reset and try again
+                        </button>
+                      </div>
+                    )}
                   </motion.div>
 
                   {/* Subtle Divider + Trust Highlights */}

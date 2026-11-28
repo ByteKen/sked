@@ -16,6 +16,7 @@ import { findTaskById, getTaskStatus } from '@/domain/taskTree';
 import { daysBetween, formatDateRange, formatFullDate, parseISODate } from '@/domain/timeline';
 import type { FlatTask, Task, WorkspaceBaseline } from '@/types';
 import { cn } from '@/utils/cn';
+import { clampProgressPercent, PROGRESS_FILL_TRANSITION } from '@/utils/motion';
 
 export interface TaskDetailModalProps {
   task: FlatTask | null;
@@ -68,20 +69,20 @@ export function TaskDetailModal({ task, allTasks, baseline, onClose }: TaskDetai
       title={task.name}
       description="Read-only task details"
       icon={
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-          <CalendarBlank weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+          <CalendarBlank weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
         </div>
       }
       maxWidth="md"
       footer={
         <div className="flex justify-end">
-          <Button variant="secondary" size="md" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose}>
             Close
           </Button>
         </div>
       }
     >
-      <div className="p-6 sm:p-7 space-y-5">
+      <div className="p-5 sm:p-6 space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant={badgeVariant}>{statusLabel}</Badge>
@@ -103,14 +104,16 @@ export function TaskDetailModal({ task, allTasks, baseline, onClose }: TaskDetai
 
         <div className="h-2.5 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
           <div
-            style={{ width: `${task.progress}%` }}
-            className={
+            style={{ transform: `translateX(${clampProgressPercent(task.progress) - 100}%)` }}
+            className={cn(
+              'h-full w-full rounded-full',
+              PROGRESS_FILL_TRANSITION,
               status === 'completed'
-                ? 'h-full bg-emerald-500'
+                ? 'bg-emerald-500'
                 : status === 'working'
-                  ? 'h-full bg-amber-500'
-                  : 'h-full bg-brand-500'
-            }
+                  ? 'bg-amber-500'
+                  : 'bg-brand-500',
+            )}
           />
         </div>
 

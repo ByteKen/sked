@@ -79,18 +79,18 @@ export function ConfirmationModal({
       title={title}
       maxWidth="sm"
       icon={
-        <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center', cfg.iconBg)}>
-          <Icon weight="duotone" className={cn('w-5 h-5', cfg.iconColor)} />
+        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', cfg.iconBg)}>
+          <Icon weight="duotone" className={cn('w-4 h-4', cfg.iconColor)} />
         </div>
       }
       footer={
-        <div className="flex items-center justify-end gap-2.5">
-          <Button variant="secondary" size="md" onClick={onClose} disabled={loading}>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose} disabled={loading}>
             {cancelText}
           </Button>
           <Button
             variant={cfg.confirmVariant}
-            size="md"
+            size="sm"
             loading={loading}
             onClick={() => {
               onConfirm();
@@ -102,8 +102,8 @@ export function ConfirmationModal({
         </div>
       }
     >
-      <div className="p-6 sm:p-7">
-        <p className="text-sm sm:text-[15px] text-slate-600 dark:text-slate-300 leading-relaxed">
+      <div className="px-5 sm:px-6 py-4">
+        <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">
           {message}
         </p>
       </div>

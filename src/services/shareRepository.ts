@@ -69,6 +69,10 @@ export function extractSharedViewPrefs(prefs: Partial<UserPreferences>): SharedC
     showDependencyLines: prefs.showDependencyLines ?? DEFAULT_PREFERENCES.showDependencyLines,
     showSubtaskConnectors: prefs.showSubtaskConnectors ?? DEFAULT_PREFERENCES.showSubtaskConnectors,
     showTaskDescriptions: prefs.showTaskDescriptions ?? DEFAULT_PREFERENCES.showTaskDescriptions,
+    showProgressPercentages:
+      prefs.showProgressPercentages ?? DEFAULT_PREFERENCES.showProgressPercentages,
+    showTodayLine: prefs.showTodayLine ?? DEFAULT_PREFERENCES.showTodayLine,
+    highlightWeekends: prefs.highlightWeekends ?? DEFAULT_PREFERENCES.highlightWeekends,
   };
 }
 

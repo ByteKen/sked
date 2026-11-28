@@ -1,7 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
-import { sanitizeAgendaItems } from '../../src/domain/agenda.js';
+import {
+  computeNextAgendaReminder,
+  isRepeatingAgendaItem,
+  sanitizeAgendaItems,
+  sanitizeCompletedDates,
+} from '../../src/domain/agenda.js';
 import { escapeTelegramHtml, getLocalDatePartsInTimezone } from '../../src/domain/reminders.js';
 import {
   BOT_COMMANDS,
@@ -18,7 +23,7 @@ import {
   type BotViewPayload,
   type TelegramWorkspaceBundle,
 } from '../../src/domain/telegramBot.js';
-import { cancelAgendaCloudTask } from '../_lib/cloudTasks.js';
+import { cancelAgendaCloudTask, scheduleAgendaCloudTask } from '../_lib/cloudTasks.js';
 import {
   extractUserWorkspaces,
   getAdminDb,
@@ -342,16 +347,60 @@ async function handleCallbackQuery(
         return;
       }
 
-      if (target.cloudTaskName) {
-        await cancelAgendaCloudTask(target.cloudTaskName);
+      const nowISO = new Date().toISOString();
+      const repeating = isRepeatingAgendaItem(target);
+      let updatedTarget = target;
+
+      if (repeating) {
+        const occDate =
+          parsed.occurrenceDate ?? getLocalDatePartsInTimezone(new Date(), target.timezone).dateISO;
+        const completedDates = sanitizeCompletedDates([...(target.completedDates ?? []), occDate]);
+        const nextReminder = computeNextAgendaReminder({
+          date: target.date,
+          time: target.time,
+          recurrence: target.recurrence,
+          recurrenceEndDate: target.recurrenceEndDate,
+          completedDates,
+          reminderOffsetMinutes: target.reminderOffsetMinutes,
+          timezone: target.timezone,
+          defaultReminderHour: sub.reminderHour ?? 9,
+        });
+
+        let cloudTaskName = target.cloudTaskName ?? null;
+        const nextTargetISO = nextReminder?.reminderTargetISO ?? null;
+        const targetChanged = nextTargetISO !== target.reminderTargetISO;
+
+        if (cloudTaskName && (targetChanged || !nextTargetISO)) {
+          await cancelAgendaCloudTask(cloudTaskName);
+          cloudTaskName = null;
+        }
+        if (nextTargetISO && sub.enabled && !cloudTaskName) {
+          const scheduled = await scheduleAgendaCloudTask({
+            uid: sub.uid,
+            itemId: target.id,
+            reminderTargetISO: nextTargetISO,
+            baseUrl,
+          });
+          cloudTaskName = scheduled.taskName;
+        }
+
+        updatedTarget = {
+          ...target,
+          isDone: false,
+          completedDates,
+          reminderTargetISO: nextTargetISO,
+          cloudTaskName,
+          reminderSentAt: nextTargetISO ? null : nowISO,
+          updatedAt: nowISO,
+        };
+      } else {
+        if (target.cloudTaskName) {
+          await cancelAgendaCloudTask(target.cloudTaskName);
+        }
+        updatedTarget = { ...target, isDone: true, cloudTaskName: null, updatedAt: nowISO };
       }
 
-      const nowISO = new Date().toISOString();
-      const nextItems = items.map((entry) =>
-        entry.id === target.id
-          ? { ...entry, isDone: true, cloudTaskName: null, updatedAt: nowISO }
-          : entry,
-      );
+      const nextItems = items.map((entry) => (entry.id === target.id ? updatedTarget : entry));
 
       await userRef.set(
         {
@@ -364,7 +413,9 @@ async function handleCallbackQuery(
       await renderViewToChat(
         chatIdStr,
         {
-          text: `<b>✅ Completed Personal Agenda</b>\n\n<s>${escapeTelegramHtml(target.title)}</s>`,
+          text: repeating
+            ? `<b>✅ Completed Today’s Occurrence</b>\n\n<s>${escapeTelegramHtml(target.title)}</s>\n<i>Next repeating reminder stays scheduled automatically.</i>`
+            : `<b>✅ Completed Personal Agenda</b>\n\n<s>${escapeTelegramHtml(target.title)}</s>`,
           replyMarkup: {
             inline_keyboard: [[{ text: '📅 Today', callback_data: 'to' }]],
           },

@@ -109,6 +109,11 @@ function localStatusApiPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), localStatusApiPlugin()],
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+    },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

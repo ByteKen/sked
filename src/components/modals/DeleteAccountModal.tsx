@@ -67,29 +67,29 @@ export function DeleteAccountModal({ isOpen, onClose, onDeleted }: DeleteAccount
       description="This action cannot be undone and erases all cloud data"
       maxWidth="md"
       icon={
-        <div className="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200/80 dark:bg-rose-500/15 dark:border-rose-500/25 flex items-center justify-center">
-          <WarningOctagon weight="duotone" className="w-5 h-5 text-rose-600 dark:text-rose-400" />
+        <div className="w-8 h-8 rounded-lg bg-rose-50 border border-rose-200/80 dark:bg-rose-500/15 dark:border-rose-500/25 flex items-center justify-center">
+          <WarningOctagon weight="duotone" className="w-4 h-4 text-rose-600 dark:text-rose-400" />
         </div>
       }
       footer={
-        <div className="flex items-center justify-end gap-2.5">
-          <Button variant="secondary" size="md" onClick={handleClose} disabled={deleting}>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={handleClose} disabled={deleting}>
             Cancel
           </Button>
           <Button
             variant="danger"
-            size="md"
+            size="sm"
             loading={deleting}
             disabled={!isConfirmed || deleting}
             onClick={() => void handleDelete()}
-            leftIcon={<Trash weight="duotone" className="w-4 h-4" />}
+            leftIcon={<Trash weight="duotone" className="w-3.5 h-3.5" />}
           >
             Permanently Delete Account
           </Button>
         </div>
       }
     >
-      <div className="p-6 sm:p-7 space-y-5">
+      <div className="p-5 sm:p-6 space-y-4">
         {user && (
           <div className="p-4 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025] flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -151,7 +151,7 @@ export function DeleteAccountModal({ isOpen, onClose, onDeleted }: DeleteAccount
             placeholder="DELETE"
             autoComplete="off"
             disabled={deleting}
-            className="w-full h-11 px-4 font-mono text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition"
+            className="w-full h-10 px-3.5 font-mono text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition"
           />
         </div>
 

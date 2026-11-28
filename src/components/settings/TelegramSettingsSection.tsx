@@ -201,9 +201,9 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
       )}
     >
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+        <h4 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
           Telegram Bot &amp; Alerts
-        </h3>
+        </h4>
         {telegram?.connected && (
           <Badge variant={telegram.enabled ? 'emerald' : 'neutral'}>
             <span
@@ -218,7 +218,7 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
       </div>
 
       {!telegram?.connected ? (
-        <div className="p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025] space-y-4">
+        <div className="p-4 rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/60 dark:bg-white/[0.02] space-y-3.5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0">
               <div className="w-9 h-9 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0 mt-0.5">
@@ -294,9 +294,9 @@ export function TelegramSettingsSection({ embedded = false }: TelegramSettingsSe
           )}
         </div>
       ) : (
-        <div className="p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025] space-y-4">
+        <div className="space-y-4">
           {/* Interactive Bot Companion Banner */}
-          <div className="p-3.5 rounded-xl bg-white/90 dark:bg-surface-dark/70 border border-slate-200/80 dark:border-white/[0.07] space-y-2">
+          <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-white/[0.025] border border-slate-200/75 dark:border-white/[0.07] space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center shrink-0">
                 <TelegramLogo

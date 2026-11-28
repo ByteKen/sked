@@ -10,9 +10,9 @@ import { ImportModal } from '@/components/modals/ImportModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { TaskModal } from '@/components/modals/TaskModal';
+import { GanttCanvasSkeleton, WorkspacePageSkeleton } from '@/components/skeletons/PageSkeletons';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { KanbanBoardView } from '@/components/views/KanbanBoardView';
 import { TaskListView } from '@/components/views/TaskListView';
 import { FloatingActionDock } from '@/components/workspace/FloatingActionDock';
@@ -47,6 +47,7 @@ export function WorkspacePage() {
 
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspacesLoading = useWorkspaceStore((s) => s.loading);
+  const workspacesLoadedForUid = useWorkspaceStore((s) => s.loadedForUid);
   const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const switchWorkspace = useWorkspaceStore((s) => s.switchWorkspace);
   const saveBaseline = useWorkspaceStore((s) => s.saveBaseline);
@@ -54,6 +55,7 @@ export function WorkspacePage() {
 
   const {
     tasks,
+    loading: tasksLoading,
     initTasks,
     cleanup: cleanupTasks,
     addTask,
@@ -96,9 +98,11 @@ export function WorkspacePage() {
 
   const currentWorkspace = workspaceId ? (workspaces[workspaceId] ?? null) : null;
 
+  const isWorkspacesPending = workspacesLoading || (Boolean(user?.id) && workspacesLoadedForUid !== user?.id);
+
   // Validate route param & switch workspace
   useEffect(() => {
-    if (workspacesLoading || !workspaceId) return;
+    if (isWorkspacesPending || !workspaceId) return;
 
     if (!workspaces[workspaceId]) {
       navigate('/', { replace: true });
@@ -111,7 +115,7 @@ export function WorkspacePage() {
         switchingRef.current = false;
       });
     }
-  }, [workspaceId, workspaces, workspacesLoading, currentWorkspaceId, switchWorkspace, navigate]);
+  }, [workspaceId, workspaces, isWorkspacesPending, currentWorkspaceId, switchWorkspace, navigate]);
 
   const hasCurrentWorkspace = Boolean(currentWorkspace);
   const collabShareKey =
@@ -353,16 +357,8 @@ export function WorkspacePage() {
     onGoToToday: activeView === 'timeline' ? () => ganttRef.current?.scrollToToday() : undefined,
   });
 
-  if (workspacesLoading || !currentWorkspace) {
-    return (
-      <div className="min-h-screen bg-canvas-light dark:bg-canvas-dark p-6 space-y-4">
-        <Skeleton className="h-12 w-full" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Skeleton className="h-[75vh] md:col-span-1" />
-          <Skeleton className="h-[75vh] md:col-span-3" />
-        </div>
-      </div>
-    );
+  if (isWorkspacesPending || !currentWorkspace) {
+    return <WorkspacePageSkeleton variant="workspace" />;
   }
 
   return (
@@ -394,7 +390,9 @@ export function WorkspacePage() {
           !isChartExpanded && 'md:p-3 pb-[60px] md:pb-3',
         )}
       >
-        {tasks.length === 0 ? (
+        {tasksLoading && tasks.length === 0 ? (
+          <GanttCanvasSkeleton />
+        ) : tasks.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-6">
             <div className="max-w-sm w-full text-center rounded-2xl border border-slate-300/80 dark:border-white/10 bg-white dark:bg-surface-dark p-8 shadow-surface-md">
               <div className="inline-flex justify-center mb-4">

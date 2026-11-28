@@ -192,28 +192,28 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
       description={workspace.title}
       maxWidth="md"
       icon={
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-          <ShareNetwork weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+          <ShareNetwork weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
         </div>
       }
       footer={
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <span className="text-xs text-slate-500 dark:text-slate-400">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400">
             Shared as{' '}
             <strong className="font-semibold text-slate-700 dark:text-slate-200">
               {ownerName}
             </strong>{' '}
-            · edit in Settings → Profile
+            · Settings → Profile
           </span>
-          <Button variant="primary" size="md" onClick={onClose}>
+          <Button variant="primary" size="sm" onClick={onClose}>
             Done
           </Button>
         </div>
       }
     >
-      <div className="p-6 sm:p-7 space-y-5">
-        {/* Public Read-Only Toggle Card */}
-        <div className="flex items-center justify-between gap-4 p-4 sm:p-5 rounded-xl border border-slate-200/90 dark:border-white/[0.08] bg-slate-50/70 dark:bg-white/[0.025]">
+      <div className="p-5 sm:p-6 space-y-4">
+        {/* Public Read-Only Toggle Row */}
+        <div className="flex items-center justify-between gap-3.5 p-3.5 rounded-xl border border-slate-200/80 dark:border-white/[0.08] bg-slate-50/60 dark:bg-white/[0.02]">
           <div className="flex items-start gap-3.5 min-w-0">
             <div className="mt-0.5 shrink-0">
               {isShared ? (
@@ -271,25 +271,25 @@ export function ShareModal({ isOpen, workspace, tasksOverride, onClose }: ShareM
                   >
                     Shareable URL
                   </label>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
                     <input
                       id="share-link-url"
                       type="text"
                       readOnly
                       value={shareUrl}
                       onFocus={(e) => e.currentTarget.select()}
-                      className="flex-1 h-11 px-3.5 text-xs sm:text-[13px] font-mono rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-canvas-dark text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                      className="flex-1 h-9 px-3 text-xs font-mono rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-canvas-dark text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
                     />
                     <Button
                       variant={copied ? 'primary' : 'secondary'}
-                      size="md"
-                      className="h-11 px-4"
+                      size="sm"
+                      className="h-9 px-3.5"
                       onClick={() => void handleCopy()}
                       leftIcon={
                         copied ? (
-                          <Check weight="bold" className="w-4 h-4" />
+                          <Check weight="bold" className="w-3.5 h-3.5" />
                         ) : (
-                          <Copy weight="duotone" className="w-4 h-4" />
+                          <Copy weight="duotone" className="w-3.5 h-3.5" />
                         )
                       }
                     >

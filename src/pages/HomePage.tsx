@@ -24,10 +24,13 @@ import { UserProfilePill } from '@/components/layout/UserProfilePill';
 import { ConfirmationModal } from '@/components/modals/ConfirmationModal';
 import { SettingsModal } from '@/components/modals/SettingsModal';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { HomeWorkspacesSkeleton } from '@/components/skeletons/PageSkeletons';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { WorkspaceCard } from '@/components/workspace/WorkspaceCard';
+import { doesAgendaItemOccurOnDate, isAgendaOccurrenceDone } from '@/domain/agenda';
 import { buildPortfolioFocusSummary } from '@/domain/projectHealth';
 import { TASK_STATUS_LABELS } from '@/domain/taskViews';
 import { formatISODate, getTodayLocal } from '@/domain/timeline';
@@ -40,7 +43,7 @@ import { toast } from '@/store/toastStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { SharedChartAccess, Task, TaskStatus, Workspace } from '@/types';
 import { cn } from '@/utils/cn';
-import { FADE_UP_ITEM, SPRING_SNAPPY, STAGGER_CONTAINER } from '@/utils/motion';
+import { SPRING_SNAPPY, STUDIO_EASE } from '@/utils/motion';
 
 type WorkspaceHealthFilter = 'all' | 'attention' | 'on-track' | 'completed';
 type HomeDashboardTab = 'workspaces' | 'calendar';
@@ -62,6 +65,7 @@ export function HomePage() {
   const agendaItems = useAgendaStore((s) => s.items);
 
   const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const workspacesLoading = useWorkspaceStore((s) => s.loading);
   const workspaceStats = useWorkspaceStore((s) => s.workspaceStats);
   const workspaceTasks = useWorkspaceStore((s) => s.workspaceTasks);
   const createWorkspace = useWorkspaceStore((s) => s.createWorkspace);
@@ -114,7 +118,11 @@ export function HomePage() {
   const todayISO = useMemo(() => formatISODate(getTodayLocal()), []);
 
   const todayOpenAgendaCount = useMemo(
-    () => agendaItems.filter((item) => item.date === todayISO && !item.isDone).length,
+    () =>
+      agendaItems.filter(
+        (item) =>
+          doesAgendaItemOccurOnDate(item, todayISO) && !isAgendaOccurrenceDone(item, todayISO),
+      ).length,
     [agendaItems, todayISO],
   );
 
@@ -278,21 +286,21 @@ export function HomePage() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+      <motion.main
+        initial={{ opacity: 0.9, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: STUDIO_EASE }}
+        className="relative z-10 flex-1 w-full max-w-7xl mx-auto px-5 sm:px-8 py-10 sm:py-14"
+      >
         {/* Kroma-Style Open Editorial Hero */}
-        <motion.div
-          variants={STAGGER_CONTAINER}
-          initial="hidden"
-          animate="visible"
-          className="mb-10 sm:mb-12"
-        >
-          <motion.div
-            variants={FADE_UP_ITEM}
-            className="flex flex-col md:flex-row md:items-end justify-between gap-6"
-          >
+        <div className="mb-10 sm:mb-12">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div>
-              {workspaceList.length > 0 && (
-                <div className="inline-flex flex-wrap items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-white/[0.09] bg-white/85 dark:bg-white/[0.04] shadow-surface-sm text-xs mb-5">
+              {workspacesLoading ? (
+                <Skeleton className="h-7 w-72 rounded-full mb-5" />
+              ) : (
+                workspaceList.length > 0 && (
+                  <div className="inline-flex flex-wrap items-center gap-3 px-3.5 py-1.5 rounded-full border border-slate-200/90 dark:border-white/[0.09] bg-white/85 dark:bg-white/[0.04] shadow-surface-sm text-xs mb-5">
                   <span className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-200">
                     <Stack className="w-3.5 h-3.5 text-brand-600 dark:text-brand-400" weight="duotone" />
                     <span className="font-mono font-semibold tabular-nums">
@@ -337,6 +345,7 @@ export function HomePage() {
                     </>
                   )}
                 </div>
+                )
               )}
 
               <h1 className="text-3xl sm:text-5xl font-bold tracking-[-0.03em] text-slate-900 dark:text-white leading-[1.08]">
@@ -351,17 +360,22 @@ export function HomePage() {
               </p>
             </div>
 
-            {workspaceList.length > 0 && activeTab === 'workspaces' && (
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setShowCreateModal(true)}
-                leftIcon={<Plus className="w-4 h-4" weight="bold" />}
-              >
-                New Workspace
-              </Button>
-            )}
-          </motion.div>
+            {activeTab === 'workspaces' &&
+              (workspacesLoading ? (
+                <Skeleton className="h-11 w-40 rounded-xl shrink-0" />
+              ) : (
+                workspaceList.length > 0 && (
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={() => setShowCreateModal(true)}
+                    leftIcon={<Plus className="w-4 h-4" weight="bold" />}
+                  >
+                    New Workspace
+                  </Button>
+                )
+              ))}
+          </div>
 
           {/* Home Dashboard Tabs: Workspaces | Calendar */}
           <div className="mt-7 flex items-center justify-between gap-3 flex-wrap">
@@ -422,7 +436,7 @@ export function HomePage() {
               })}
             </div>
           </div>
-        </motion.div>
+        </div>
 
         {/* Calendar Tab OR Workspaces Grid */}
         {activeTab === 'calendar' ? (
@@ -436,6 +450,8 @@ export function HomePage() {
             }
             onOpenSettings={() => setShowSettingsModal(true)}
           />
+        ) : workspacesLoading ? (
+          <HomeWorkspacesSkeleton />
         ) : workspaceList.length > 0 ? (
           <>
             {aggregateStats.totalTasks > 0 && (
@@ -535,43 +551,37 @@ export function HomePage() {
                 </Button>
               </div>
             ) : (
-              <motion.div
-                variants={STAGGER_CONTAINER}
-                initial="hidden"
-                animate="visible"
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
-              >
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredWorkspaces.map((ws, idx) => (
-                  <motion.div key={ws.id} variants={FADE_UP_ITEM}>
-                    <WorkspaceCard
-                      workspace={ws}
-                      stats={workspaceStats[ws.id]}
-                      health={portfolioFocus.healthByWorkspaceId[ws.id]}
-                      accentIndex={idx}
-                      isEditing={editingId === ws.id}
-                      editingName={editingName}
-                      inputError={editError}
-                      onOpen={(id) => navigate(`/workspace/${id}`)}
-                      onStartEdit={(target) => {
-                        setEditingId(target.id);
-                        setEditingName(target.title);
-                        setEditError(null);
-                      }}
-                      onChangeEditName={(val) => {
-                        setEditingName(val);
-                        setEditError(null);
-                      }}
-                      onSaveEdit={() => void handleSaveRename()}
-                      onCancelEdit={() => {
-                        setEditingId(null);
-                        setEditError(null);
-                      }}
-                      onShare={(target) => setShareWorkspace(target)}
-                      onDelete={(target) => setDeleteTarget(target)}
-                    />
-                  </motion.div>
+                  <WorkspaceCard
+                    key={ws.id}
+                    workspace={ws}
+                    stats={workspaceStats[ws.id]}
+                    health={portfolioFocus.healthByWorkspaceId[ws.id]}
+                    accentIndex={idx}
+                    isEditing={editingId === ws.id}
+                    editingName={editingName}
+                    inputError={editError}
+                    onOpen={(id) => navigate(`/workspace/${id}`)}
+                    onStartEdit={(target) => {
+                      setEditingId(target.id);
+                      setEditingName(target.title);
+                      setEditError(null);
+                    }}
+                    onChangeEditName={(val) => {
+                      setEditingName(val);
+                      setEditError(null);
+                    }}
+                    onSaveEdit={() => void handleSaveRename()}
+                    onCancelEdit={() => {
+                      setEditingId(null);
+                      setEditError(null);
+                    }}
+                    onShare={(target) => setShareWorkspace(target)}
+                    onDelete={(target) => setDeleteTarget(target)}
+                  />
                 ))}
-              </motion.div>
+              </div>
             )}
           </>
         ) : (
@@ -725,7 +735,7 @@ export function HomePage() {
             </div>
           </section>
         )}
-      </main>
+      </motion.main>
 
       <AppFooter />
 
@@ -741,15 +751,15 @@ export function HomePage() {
         description="Start a new project timeline with nested phases and live sharing"
         maxWidth="md"
         icon={
-          <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-            <Stack weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+          <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+            <Stack weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
           </div>
         }
         footer={
-          <div className="flex justify-end gap-2.5">
+          <div className="flex justify-end gap-2">
             <Button
               variant="secondary"
-              size="md"
+              size="sm"
               onClick={() => {
                 setShowCreateModal(false);
                 setNewWorkspaceName('');
@@ -758,17 +768,17 @@ export function HomePage() {
             >
               Cancel
             </Button>
-            <Button variant="primary" size="md" loading={isCreating} onClick={() => void handleCreate()}>
+            <Button variant="primary" size="sm" loading={isCreating} onClick={() => void handleCreate()}>
               Create Workspace
             </Button>
           </div>
         }
       >
-        <div className="p-6 sm:p-7 space-y-5">
+        <div className="p-5 sm:p-6 space-y-4">
           <div>
             <label
               htmlFor="new-workspace-input"
-              className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5"
             >
               Workspace Name
             </label>
@@ -785,7 +795,7 @@ export function HomePage() {
               }}
               placeholder="e.g., Q3 Launch Roadmap"
               autoFocus
-              className="w-full h-11 px-4 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              className="w-full h-10 px-3.5 text-[13px] rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
             />
             {inputError && (
               <p className="mt-2 text-xs text-rose-500 flex items-center gap-1.5">

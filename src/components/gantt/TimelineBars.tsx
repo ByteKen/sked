@@ -19,6 +19,7 @@ import type {
   WorkspaceBaseline,
 } from '@/types';
 import { cn } from '@/utils/cn';
+import { clampProgressPercent, PROGRESS_FILL_TRANSITION } from '@/utils/motion';
 import { BAR_HEIGHT_PX, getBarCenterY, STATUS_BAR_STYLES } from './ganttStyles';
 
 interface ActiveBarDrag {
@@ -57,6 +58,7 @@ export interface TimelineBarsProps {
   taskLabelPosition: TaskLabelPosition;
   subtaskLabelPosition: SubtaskLabelPosition;
   showTaskDescriptions: boolean;
+  showProgressPercentages?: boolean;
   selectedTaskId: number | null;
   onSelectTask: (taskId: number) => void;
   onTaskActivate: (task: FlatTask) => void;
@@ -98,6 +100,7 @@ export const TimelineBars = memo(function TimelineBars({
   taskLabelPosition,
   subtaskLabelPosition,
   showTaskDescriptions,
+  showProgressPercentages = true,
   selectedTaskId,
   onSelectTask,
   onTaskActivate,
@@ -497,7 +500,7 @@ export const TimelineBars = memo(function TimelineBars({
                 )}
               >
                 {task.name}
-                {task.progress > 0 && !deadline ? (
+                {showProgressPercentages && task.progress > 0 && !deadline ? (
                   <span className="ml-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">
                     · {task.progress}%
                   </span>
@@ -613,14 +616,19 @@ export const TimelineBars = memo(function TimelineBars({
                   isDimmedByCpm && 'opacity-40 hover:opacity-80',
                 )}
               >
-                {/* Progress fill sheen */}
-                {task.progress > 0 && task.progress < 100 && (
-                  <span
-                    aria-hidden="true"
-                    style={{ width: `${task.progress}%` }}
-                    className="absolute inset-y-0 left-0 bg-white/25 pointer-events-none"
-                  />
-                )}
+                {/* Progress fill sheen — always mounted so 0% ↔ partial ↔ 100% transitions smoothly on the GPU */}
+                <span
+                  aria-hidden="true"
+                  data-testid={`task-progress-fill-${task.id}`}
+                  style={{
+                    transform: `scaleX(${clampProgressPercent(task.progress) / 100})`,
+                    opacity: task.progress > 0 && task.progress < 100 ? 1 : 0,
+                  }}
+                  className={cn(
+                    'absolute inset-0 origin-left bg-white/25 pointer-events-none',
+                    PROGRESS_FILL_TRANSITION,
+                  )}
+                />
 
                 {/* Phase summary subtle end-cap accents */}
                 {isPhase && (
@@ -643,7 +651,7 @@ export const TimelineBars = memo(function TimelineBars({
                       {completed && <Check weight="bold" className="w-3 h-3 shrink-0" />}
                       <span className="truncate">{task.name}</span>
                     </span>
-                    {renderWidth > 115 && task.progress > 0 && (
+                    {showProgressPercentages && renderWidth > 115 && task.progress > 0 && (
                       <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-black/20 shrink-0 tabular-nums">
                         {task.progress}%
                       </span>
@@ -718,7 +726,7 @@ export const TimelineBars = memo(function TimelineBars({
                 {labelPos === 'outside' && (
                   <span className="truncate text-xs font-medium text-slate-700 dark:text-slate-300">
                     {task.name}
-                    {task.progress > 0 && !deadline ? (
+                    {showProgressPercentages && task.progress > 0 && !deadline ? (
                       <span className="ml-1 font-mono text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
                         {task.progress}%
                       </span>

@@ -44,6 +44,7 @@ interface WorkspaceStoreState {
   workspaceTasks: Record<string, Task[]>;
   currentWorkspaceId: string | null;
   loading: boolean;
+  loadedForUid: string | null;
   isSwitching: boolean;
   unsubscribe: (() => void) | null;
   getCurrentWorkspace: () => Workspace | null;
@@ -93,6 +94,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
     workspaceTasks: {},
     currentWorkspaceId: null,
     loading: true,
+    loadedForUid: null,
     isSwitching: false,
     unsubscribe: null,
 
@@ -120,12 +122,17 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
           workspaceTasks: {},
           currentWorkspaceId: null,
           loading: false,
+          loadedForUid: null,
           unsubscribe: null,
         });
         return () => {};
       }
 
-      set({ loading: true });
+      const uid = user.uid;
+      set((state) => ({
+        loading: true,
+        loadedForUid: state.loadedForUid === uid ? uid : null,
+      }));
 
       const unsubscribe = userDocumentSync.subscribe(
         (snapshot) => {
@@ -136,6 +143,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
               workspaceTasks: {},
               currentWorkspaceId: null,
               loading: false,
+              loadedForUid: uid,
             });
             return;
           }
@@ -161,6 +169,7 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
               workspaceStats: nextStats,
               workspaceTasks: nextTasksMap,
               loading: false,
+              loadedForUid: uid,
             });
             return;
           }
@@ -181,10 +190,11 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
             workspaceTasks: nextTasksMap,
             currentWorkspaceId: nextCurrentId,
             loading: false,
+            loadedForUid: uid,
           });
         },
         () => {
-          set({ loading: false });
+          set({ loading: false, loadedForUid: uid });
         },
       );
 
@@ -203,7 +213,8 @@ export const useWorkspaceStore = create<WorkspaceStoreState>()(
         workspaceStats: {},
         workspaceTasks: {},
         currentWorkspaceId: null,
-        loading: false,
+        loading: true,
+        loadedForUid: null,
         isSwitching: false,
       });
     },

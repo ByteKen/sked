@@ -70,7 +70,7 @@ export type ParsedBotCallback =
     page: number;
   }
   | { type: 'quick_done'; workspaceId: string; taskId: number; source: 'alert' | 'today' | 'upcoming' }
-  | { type: 'agenda_done'; itemId: string };
+  | { type: 'agenda_done'; itemId: string; occurrenceDate?: string };
 
 export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'tasks', description: 'Browse tasks and mark items done' },
@@ -175,7 +175,11 @@ export function parseBotCallback(data: string | undefined): ParsedBotCallback {
     case 'agd': {
       const itemId = parts[1]?.trim();
       if (!itemId) return { type: 'noop' };
-      return { type: 'agenda_done', itemId };
+      const rawDate = parts[2]?.trim();
+      const occurrenceDate = rawDate && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined;
+      return occurrenceDate
+        ? { type: 'agenda_done', itemId, occurrenceDate }
+        : { type: 'agenda_done', itemId };
     }
     default:
       return { type: 'noop' };

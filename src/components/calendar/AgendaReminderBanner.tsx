@@ -11,20 +11,23 @@ import {
 } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  AGENDA_RECURRENCE_SHORT_LABELS,
   buildAgendaFiredKey,
   findDueAndNextInAppReminders,
   formatClockTime12h,
   getAgendaReminderHeading,
+  isAgendaOccurrenceDone,
+  isRepeatingAgendaItem,
 } from '@/domain/agenda';
 import { useAgendaStore } from '@/store/agendaStore';
 import { useAuthStore } from '@/store/authStore';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { toast } from '@/store/toastStore';
 import type { AgendaItem } from '@/types';
 import { SPRING_SNAPPY } from '@/utils/motion';
 import {
   isReminderSoundEnabled,
   playReminderChime,
-  setReminderSoundEnabled,
   subscribeReminderSoundPreference,
 } from '@/utils/reminderSound';
 
@@ -63,6 +66,7 @@ function persistFiredKeys(keys: Set<string>): void {
 export function AgendaReminderBanner() {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const enableInAppReminders = usePreferencesStore((s) => s.enableInAppReminders);
   const items = useAgendaStore((s) => s.items);
   const toggleDone = useAgendaStore((s) => s.toggleDone);
 
@@ -73,25 +77,25 @@ export function AgendaReminderBanner() {
 
   useEffect(() => subscribeReminderSoundPreference(setSoundEnabled), []);
 
-  // Automatically remove any active alert whose item was completed or deleted elsewhere (e.g. via Telegram)
+  // Automatically remove any active alert whose occurrence was completed or deleted elsewhere (e.g. via Telegram)
   useEffect(() => {
     setActiveAlerts((prev) =>
       prev.filter((alert) => {
         const current = items.find((entry) => entry.id === alert.id);
-        return Boolean(current && !current.isDone);
+        return Boolean(current && !isAgendaOccurrenceDone(current, alert.date));
       }),
     );
   }, [items]);
 
-  // Clear banners when signed out
+  // Clear banners when signed out or when in-app reminders are disabled
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !enableInAppReminders) {
       setActiveAlerts([]);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, enableInAppReminders]);
 
   useEffect(() => {
-    if (!isAuthenticated || items.length === 0) return;
+    if (!isAuthenticated || !enableInAppReminders || items.length === 0) return;
 
     let timerId: number | null = null;
 
@@ -140,7 +144,7 @@ export function AgendaReminderBanner() {
       if (timerId !== null) window.clearTimeout(timerId);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [isAuthenticated, items]);
+  }, [isAuthenticated, enableInAppReminders, items]);
 
   const handleDismiss = useCallback((itemId: string) => {
     setActiveAlerts((prev) => prev.filter((entry) => entry.id !== itemId));
@@ -150,7 +154,9 @@ export function AgendaReminderBanner() {
     async (item: AgendaItem) => {
       setCompletingId(item.id);
       try {
-        const res = await toggleDone(item.id);
+        const res = isRepeatingAgendaItem(item)
+          ? await toggleDone(item.id, item.date)
+          : await toggleDone(item.id);
         if (res.ok) {
           setActiveAlerts((prev) => prev.filter((entry) => entry.id !== item.id));
           toast.success('Completed', item.title);
@@ -166,14 +172,14 @@ export function AgendaReminderBanner() {
 
   const handleToggleSound = () => {
     const next = !soundEnabled;
-    setReminderSoundEnabled(next);
+    usePreferencesStore.getState().setReminderSoundEnabled(next);
     setSoundEnabled(next);
     if (next) {
       playReminderChime({ force: true });
     }
   };
 
-  if (!isAuthenticated || activeAlerts.length === 0) {
+  if (!isAuthenticated || !enableInAppReminders || activeAlerts.length === 0) {
     return null;
   }
 
@@ -245,6 +251,11 @@ export function AgendaReminderBanner() {
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/10 font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200">
                         <Clock weight="bold" className="w-3 h-3 text-brand-500" />
                         {formatClockTime12h(item.time)}
+                      </span>
+                    )}
+                    {item.recurrence && item.recurrence !== 'none' && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-700 dark:text-brand-300 text-[10px] font-semibold">
+                        {AGENDA_RECURRENCE_SHORT_LABELS[item.recurrence]}
                       </span>
                     )}
                   </div>

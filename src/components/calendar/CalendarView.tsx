@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ArrowSquareOut,
+  ArrowsClockwise,
   BellRinging,
   CalendarBlank,
   CaretLeft,
@@ -11,31 +12,28 @@ import {
   PaperPlaneTilt,
   PencilSimple,
   Plus,
-  SpeakerHigh,
-  SpeakerSlash,
   Trash,
   WarningCircle,
 } from '@phosphor-icons/react';
 import { AgendaItemModal } from '@/components/modals/AgendaItemModal';
+import { CalendarAgendaSkeleton } from '@/components/skeletons/PageSkeletons';
 import { Button } from '@/components/ui/Button';
 import {
+  AGENDA_RECURRENCE_SHORT_LABELS,
   buildCalendarMonthGrid,
   collectWorkspaceDeadlinesForCalendar,
+  computeReminderTargetISO,
+  expandAgendaItemsForDates,
   formatClockTime12h,
   formatUtcIsoInTimezone,
   getAgendaDeliveryStatus,
+  type CalendarAgendaOccurrence,
   type CalendarDeadlineItem,
 } from '@/domain/agenda';
 import { useAgendaStore } from '@/store/agendaStore';
 import { toast } from '@/store/toastStore';
 import type { AgendaItem, AgendaItemDraft, Task, TaskStatus, WorkspaceMap } from '@/types';
 import { cn } from '@/utils/cn';
-import {
-  isReminderSoundEnabled,
-  playReminderChime,
-  setReminderSoundEnabled,
-  subscribeReminderSoundPreference,
-} from '@/utils/reminderSound';
 
 type CalendarFilterMode = 'all' | 'agenda' | 'deadlines';
 
@@ -94,6 +92,7 @@ export function CalendarView({
   onOpenSettings,
 }: CalendarViewProps) {
   const agendaItems = useAgendaStore((s) => s.items);
+  const agendaLoading = useAgendaStore((s) => s.loading);
   const telegramConfig = useAgendaStore((s) => s.telegramConfig);
   const saveAgendaItem = useAgendaStore((s) => s.saveItem);
   const toggleAgendaDone = useAgendaStore((s) => s.toggleDone);
@@ -110,21 +109,6 @@ export function CalendarView({
   const [filterMode, setFilterMode] = useState<CalendarFilterMode>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => isReminderSoundEnabled());
-
-  useEffect(() => subscribeReminderSoundPreference(setSoundEnabled), []);
-
-  const handleToggleSound = () => {
-    const next = !soundEnabled;
-    setReminderSoundEnabled(next);
-    setSoundEnabled(next);
-    if (next) {
-      playReminderChime({ force: true });
-      toast.info('In-app chime enabled', 'You will hear a soft bell when reminders fire.');
-    } else {
-      toast.info('In-app chime muted', 'Banners will still appear silently while Sked is open.');
-    }
-  };
 
   const telegramConnected = Boolean(telegramConfig?.connected && telegramConfig?.enabled);
   const defaultTimezone = telegramConfig?.timezone || getBrowserTimeZone();
@@ -141,14 +125,10 @@ export function CalendarView({
   );
 
   const agendaByDate = useMemo(() => {
-    const map = new Map<string, AgendaItem[]>();
-    for (const item of agendaItems) {
-      const list = map.get(item.date);
-      if (list) list.push(item);
-      else map.set(item.date, [item]);
-    }
-    return map;
-  }, [agendaItems]);
+    const dates = new Set(cells.map((c) => c.dateISO));
+    dates.add(selectedDate);
+    return expandAgendaItemsForDates(agendaItems, Array.from(dates));
+  }, [agendaItems, cells, selectedDate]);
 
   const deadlinesByDate = useMemo(() => {
     const map = new Map<string, CalendarDeadlineItem[]>();
@@ -160,7 +140,7 @@ export function CalendarView({
     return map;
   }, [allDeadlines]);
 
-  const selectedAgendaItems = useMemo(
+  const selectedAgendaOccurrences = useMemo<CalendarAgendaOccurrence[]>(
     () => (filterMode === 'deadlines' ? [] : (agendaByDate.get(selectedDate) ?? [])),
     [agendaByDate, selectedDate, filterMode],
   );
@@ -222,14 +202,16 @@ export function CalendarView({
     return true;
   };
 
-  const handleToggleAgendaDone = async (item: AgendaItem) => {
-    const res = await toggleAgendaDone(item.id);
+  const handleToggleAgendaDone = async (occ: CalendarAgendaOccurrence) => {
+    const res = occ.isRepeating
+      ? await toggleAgendaDone(occ.item.id, occ.occurrenceDate)
+      : await toggleAgendaDone(occ.item.id);
     if (!res.ok) {
       toast.error('Could not update item', res.error);
       return;
     }
-    if (!item.isDone) {
-      toast.success('Completed', item.title);
+    if (!occ.isDone) {
+      toast.success('Completed', occ.item.title);
     }
   };
 
@@ -310,27 +292,6 @@ export function CalendarView({
               );
             })}
           </div>
-
-          <button
-            type="button"
-            onClick={handleToggleSound}
-            aria-label={soundEnabled ? 'Mute in-app reminder chime' : 'Enable in-app reminder chime'}
-            title={soundEnabled ? 'In-app alert chime: On (click to mute)' : 'In-app alert chime: Muted (click to turn on)'}
-            className={cn(
-              'inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer',
-              soundEnabled
-                ? 'border-slate-200/90 dark:border-white/10 bg-white dark:bg-surface-dark text-slate-700 hover:border-brand-400 dark:text-slate-200'
-                : 'border-slate-200/80 dark:border-white/[0.08] bg-slate-100/80 dark:bg-white/[0.04] text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200',
-            )}
-          >
-            {soundEnabled ? (
-              <SpeakerHigh weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-            ) : (
-              <SpeakerSlash weight="duotone" className="w-4 h-4" />
-            )}
-            <span className="hidden sm:inline">{soundEnabled ? 'Chime On' : 'Muted'}</span>
-          </button>
-
           <Button
             variant="primary"
             size="md"
@@ -370,31 +331,35 @@ export function CalendarView({
                 kind: 'agenda' | 'deadline';
                 label: string;
                 done: boolean;
+                repeating?: boolean;
                 overdue?: boolean;
                 hasAlert?: boolean;
                 dotClass: string;
               }> = [
-                ...dayAgenda.map((item) => ({
-                  id: `a:${item.id}`,
-                  kind: 'agenda' as const,
-                  label: item.time ? `${formatClockTime12h(item.time)} ${item.title}` : item.title,
-                  done: item.isDone,
-                  hasAlert: item.reminderOffsetMinutes !== null && !item.isDone,
-                  dotClass: 'bg-brand-500',
-                })),
-                ...dayDeadlines.map((dl) => ({
-                  id: `d:${dl.key}`,
-                  kind: 'deadline' as const,
-                  label: dl.taskName,
-                  done: dl.isDone,
-                  overdue: dl.isOverdue,
-                  dotClass: dl.isDone
-                    ? 'bg-emerald-500'
-                    : dl.isOverdue
-                      ? 'bg-rose-500'
-                      : WORKSPACE_DOT_COLORS[dl.workspaceAccentIndex % WORKSPACE_DOT_COLORS.length]!,
-                })),
-              ];
+                  ...dayAgenda.map((occ) => ({
+                    id: `a:${occ.item.id}:${occ.occurrenceDate}`,
+                    kind: 'agenda' as const,
+                    label: occ.item.time
+                      ? `${formatClockTime12h(occ.item.time)} ${occ.item.title}`
+                      : occ.item.title,
+                    done: occ.isDone,
+                    repeating: occ.isRepeating,
+                    hasAlert: occ.item.reminderOffsetMinutes !== null && !occ.isDone,
+                    dotClass: 'bg-brand-500',
+                  })),
+                  ...dayDeadlines.map((dl) => ({
+                    id: `d:${dl.key}`,
+                    kind: 'deadline' as const,
+                    label: dl.taskName,
+                    done: dl.isDone,
+                    overdue: dl.isOverdue,
+                    dotClass: dl.isDone
+                      ? 'bg-emerald-500'
+                      : dl.isOverdue
+                        ? 'bg-rose-500'
+                        : WORKSPACE_DOT_COLORS[dl.workspaceAccentIndex % WORKSPACE_DOT_COLORS.length]!,
+                  })),
+                ];
 
               const maxVisible = 2;
               const overflowCount = Math.max(0, previewEntries.length - maxVisible);
@@ -456,6 +421,13 @@ export function CalendarView({
                         )}
                       >
                         <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', entry.dotClass)} />
+                        {entry.repeating && (
+                          <ArrowsClockwise
+                            weight="bold"
+                            aria-hidden="true"
+                            className="w-2.5 h-2.5 shrink-0 opacity-75"
+                          />
+                        )}
                         <span className="truncate">{entry.label}</span>
                       </div>
                     ))}
@@ -489,18 +461,10 @@ export function CalendarView({
                 )}
               </div>
               <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {selectedAgendaItems.length} personal · {selectedDeadlines.length} workspace{' '}
+                {selectedAgendaOccurrences.length} personal · {selectedDeadlines.length} workspace{' '}
                 {selectedDeadlines.length === 1 ? 'deadline' : 'deadlines'}
               </p>
             </div>
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={() => handleOpenNewForDate(selectedDate)}
-              leftIcon={<Plus className="w-3.5 h-3.5" weight="bold" />}
-            >
-              Add
-            </Button>
           </div>
 
           <div className="p-4 space-y-5 max-h-[640px] overflow-y-auto">
@@ -523,7 +487,9 @@ export function CalendarView({
                   )}
                 </div>
 
-                {selectedAgendaItems.length === 0 ? (
+                {agendaLoading && agendaItems.length === 0 ? (
+                  <CalendarAgendaSkeleton />
+                ) : selectedAgendaOccurrences.length === 0 ? (
                   <button
                     type="button"
                     onClick={() => handleOpenNewForDate(selectedDate)}
@@ -542,38 +508,52 @@ export function CalendarView({
                   </button>
                 ) : (
                   <ul className="space-y-2">
-                    {selectedAgendaItems.map((item) => {
-                      const status = getAgendaDeliveryStatus(item, telegramConnected);
+                    {selectedAgendaOccurrences.map((occ) => {
+                      const { item, occurrenceDate, isDone: occDone, isRepeating } = occ;
+                      const status = getAgendaDeliveryStatus(
+                        item,
+                        telegramConnected,
+                        undefined,
+                        occurrenceDate,
+                      );
+                      const occTargetISO = isRepeating
+                        ? computeReminderTargetISO({
+                          date: occurrenceDate,
+                          time: item.time,
+                          reminderOffsetMinutes: item.reminderOffsetMinutes,
+                          timezone: item.timezone,
+                          defaultReminderHour,
+                        })
+                        : item.reminderTargetISO;
                       const alertClock =
-                        item.reminderTargetISO &&
-                        formatUtcIsoInTimezone(item.reminderTargetISO, item.timezone);
+                        occTargetISO && formatUtcIsoInTimezone(occTargetISO, item.timezone);
 
                       return (
                         <li
-                          key={item.id}
+                          key={`${item.id}:${occurrenceDate}`}
                           data-testid={`agenda-item-${item.id}`}
                           className={cn(
                             'rounded-xl border border-slate-200/85 dark:border-white/[0.08] bg-slate-50/60 dark:bg-white/[0.025] p-3 transition-colors',
-                            item.isDone && 'opacity-65',
+                            occDone && 'opacity-65',
                           )}
                         >
                           <div className="flex items-start gap-2.5">
                             <button
                               type="button"
                               aria-label={
-                                item.isDone
+                                occDone
                                   ? `Mark "${item.title}" incomplete`
                                   : `Mark "${item.title}" done`
                               }
-                              onClick={() => void handleToggleAgendaDone(item)}
+                              onClick={() => void handleToggleAgendaDone(occ)}
                               className={cn(
                                 'mt-0.5 w-5 h-5 rounded-full border flex items-center justify-center shrink-0 transition-colors cursor-pointer',
-                                item.isDone
+                                occDone
                                   ? 'bg-emerald-500 border-emerald-500 text-white'
                                   : 'border-slate-300 dark:border-white/25 hover:border-brand-500',
                               )}
                             >
-                              {item.isDone && <Check weight="bold" className="w-3 h-3" />}
+                              {occDone && <Check weight="bold" className="w-3 h-3" />}
                             </button>
 
                             <div className="flex-1 min-w-0">
@@ -581,7 +561,7 @@ export function CalendarView({
                                 <span
                                   className={cn(
                                     'text-xs font-semibold text-slate-900 dark:text-slate-100 break-words',
-                                    item.isDone && 'line-through text-slate-500',
+                                    occDone && 'line-through text-slate-500',
                                   )}
                                 >
                                   {item.title}
@@ -590,6 +570,12 @@ export function CalendarView({
                                   <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-brand-500/10 text-brand-700 dark:text-brand-300 font-mono text-[10px] font-semibold">
                                     <Clock weight="bold" className="w-2.5 h-2.5" />
                                     {formatClockTime12h(item.time)}
+                                  </span>
+                                )}
+                                {isRepeating && item.recurrence && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-200/75 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300 text-[10px] font-semibold">
+                                    <ArrowsClockwise weight="bold" className="w-2.5 h-2.5" />
+                                    {AGENDA_RECURRENCE_SHORT_LABELS[item.recurrence]}
                                   </span>
                                 )}
                               </div>
@@ -694,8 +680,8 @@ export function CalendarView({
                         : dl.isOverdue
                           ? 'bg-rose-500'
                           : WORKSPACE_DOT_COLORS[
-                              dl.workspaceAccentIndex % WORKSPACE_DOT_COLORS.length
-                            ]!;
+                          dl.workspaceAccentIndex % WORKSPACE_DOT_COLORS.length
+                          ]!;
 
                       return (
                         <li

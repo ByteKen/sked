@@ -30,20 +30,49 @@ export interface UpdateDisplayNameResult {
   error?: string;
 }
 
+const SESSION_HINT_STORAGE_KEY = 'sked_session_hint';
+
+function readSessionHint(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(SESSION_HINT_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeSessionHint(hasSession: boolean): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    if (hasSession) {
+      localStorage.setItem(SESSION_HINT_STORAGE_KEY, '1');
+    } else {
+      localStorage.removeItem(SESSION_HINT_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage quota or private-mode errors
+  }
+}
+
 interface AuthStoreState {
   user: AuthUser | null;
   isAuthenticated: boolean;
   loading: boolean;
+  signingIn: boolean;
+  authChecked: boolean;
+  hasSessionHint: boolean;
   error: string | null;
   cancelled: boolean;
   initAuth: () => () => void;
   login: () => Promise<User | null>;
+  cancelSigningIn: () => void;
   logout: () => Promise<void>;
   setDisplayNameLocally: (name: string) => void;
   updateDisplayName: (rawName: string) => Promise<UpdateDisplayNameResult>;
   deleteAccount: () => Promise<DeleteAccountResult>;
   clearError: () => void;
 }
+
+let activeLoginAttemptId = 0;
 
 function mapFirebaseUser(firebaseUser: User): AuthUser {
   const email = firebaseUser.email ?? '';
@@ -61,26 +90,39 @@ export const useAuthStore = create<AuthStoreState>()(
     user: null,
     isAuthenticated: false,
     loading: true,
+    signingIn: false,
+    authChecked: false,
+    hasSessionHint: readSessionHint(),
     error: null,
     cancelled: false,
 
     initAuth: () => {
-      set({ loading: true });
+      set((state) => ({
+        loading: !state.authChecked,
+      }));
 
       const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
+          writeSessionHint(true);
           set({
             user: mapFirebaseUser(firebaseUser),
             isAuthenticated: true,
             loading: false,
+            signingIn: false,
+            authChecked: true,
+            hasSessionHint: true,
             error: null,
             cancelled: false,
           });
         } else {
+          writeSessionHint(false);
           set({
             user: null,
             isAuthenticated: false,
             loading: false,
+            signingIn: false,
+            authChecked: true,
+            hasSessionHint: false,
           });
         }
       });
@@ -89,19 +131,26 @@ export const useAuthStore = create<AuthStoreState>()(
     },
 
     login: async () => {
-      set({ error: null, cancelled: false, loading: true });
+      const attemptId = ++activeLoginAttemptId;
+      set({ error: null, cancelled: false, signingIn: true });
 
       try {
         const result = await signInWithPopup(auth, googleProvider);
+        if (attemptId === activeLoginAttemptId) {
+          set({ signingIn: false });
+        }
         return result.user;
       } catch (err: unknown) {
+        if (attemptId !== activeLoginAttemptId) {
+          return null;
+        }
         const firebaseErr = err as { code?: string; message?: string };
         const isCancelled =
           firebaseErr.code === 'auth/popup-closed-by-user' ||
           firebaseErr.code === 'auth/cancelled-popup-request';
 
         if (isCancelled) {
-          set({ cancelled: true, error: null, loading: false });
+          set({ cancelled: true, error: null, signingIn: false });
           return null;
         }
 
@@ -114,15 +163,29 @@ export const useAuthStore = create<AuthStoreState>()(
           errorMessage = 'This domain is not authorized in Firebase Authentication settings.';
         }
 
-        set({ error: errorMessage, cancelled: false, loading: false });
+        set({ error: errorMessage, cancelled: false, signingIn: false });
         throw err;
       }
+    },
+
+    cancelSigningIn: () => {
+      activeLoginAttemptId += 1;
+      set({ signingIn: false, error: null });
     },
 
     logout: async () => {
       try {
         await signOut(auth);
-        set({ user: null, isAuthenticated: false, error: null, cancelled: false });
+        writeSessionHint(false);
+        set({
+          user: null,
+          isAuthenticated: false,
+          loading: false,
+          signingIn: false,
+          hasSessionHint: false,
+          error: null,
+          cancelled: false,
+        });
       } catch (err) {
         console.error('Logout error:', err);
         set({ error: 'Failed to sign out. Please try again.' });
@@ -157,7 +220,7 @@ export const useAuthStore = create<AuthStoreState>()(
       const trimmed = rawName.trim();
       try {
         await saveDisplayNameInFirestore(currentUser.uid, trimmed);
-        await updateProfile(currentUser, { displayName: trimmed }).catch(() => {});
+        await updateProfile(currentUser, { displayName: trimmed }).catch(() => { });
 
         const snap = userDocumentSync.getLatestSnapshot();
         const workspaces = (snap?.data?.workspaces ?? {}) as WorkspaceMap;
@@ -220,7 +283,7 @@ export const useAuthStore = create<AuthStoreState>()(
       // Step 2: Stop live listeners and permanently purge Telegram subscription, Firestore data & public shares
       try {
         userDocumentSync.stop();
-        await disconnectTelegram().catch(() => {});
+        await disconnectTelegram().catch(() => { });
         await deleteUserAccountData(currentUser.uid);
 
         // Step 3: Delete Firebase Auth user record
@@ -232,10 +295,13 @@ export const useAuthStore = create<AuthStoreState>()(
           // Ignore storage restrictions
         }
 
+        writeSessionHint(false);
         set({
           user: null,
           isAuthenticated: false,
+          hasSessionHint: false,
           loading: false,
+          signingIn: false,
           error: null,
           cancelled: false,
         });

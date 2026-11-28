@@ -2,11 +2,16 @@ import { randomBytes } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import {
-  computeReminderTargetISO,
+  computeNextAgendaReminder,
+  isRepeatingAgendaItem,
+  isValidISODateString,
   MAX_AGENDA_ITEMS,
+  normalizeAgendaRecurrence,
   normalizeAgendaReminderOffset,
   sanitizeAgendaItems,
+  sanitizeCompletedDates,
   sortAgendaItems,
+  toggleAgendaItemCompletion,
   validateAgendaDraft,
 } from '../../src/domain/agenda.js';
 import { isValidTimeZone } from '../../src/domain/reminders.js';
@@ -23,6 +28,7 @@ interface AgendaManageBody {
   action?: 'upsert' | 'toggle-done' | 'delete';
   item?: AgendaItemDraft;
   itemId?: string;
+  occurrenceDate?: string;
 }
 
 function generateAgendaId(): string {
@@ -84,33 +90,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               : previous?.timezone || 'UTC';
         const reminderOffsetMinutes = normalizeAgendaReminderOffset(draft.reminderOffsetMinutes);
         const time = draft.time && /^\d{2}:\d{2}$/.test(draft.time) ? draft.time : null;
-        const isDone = Boolean(draft.isDone ?? previous?.isDone ?? false);
+        const recurrence = normalizeAgendaRecurrence(draft.recurrence ?? previous?.recurrence);
+        const recurrenceEndDate =
+          recurrence !== 'none' &&
+          isValidISODateString(draft.recurrenceEndDate) &&
+          draft.recurrenceEndDate >= draft.date
+            ? draft.recurrenceEndDate
+            : null;
+        const completedDates =
+          recurrence !== 'none' ? sanitizeCompletedDates(previous?.completedDates) : [];
+        const isDone =
+          recurrence !== 'none' ? false : Boolean(draft.isDone ?? previous?.isDone ?? false);
 
-        const reminderTargetISO = computeReminderTargetISO({
+        const nextReminder = computeNextAgendaReminder({
           date: draft.date,
           time,
+          isDone,
+          recurrence,
+          recurrenceEndDate,
+          completedDates,
           reminderOffsetMinutes,
           timezone,
           defaultReminderHour: sub?.reminderHour ?? 9,
         });
+        const reminderTargetISO = nextReminder?.reminderTargetISO ?? null;
 
         const scheduleChanged =
           !previous ||
           previous.reminderTargetISO !== reminderTargetISO ||
           previous.isDone !== isDone ||
-          previous.reminderOffsetMinutes !== reminderOffsetMinutes;
+          previous.reminderOffsetMinutes !== reminderOffsetMinutes ||
+          normalizeAgendaRecurrence(previous.recurrence) !== recurrence ||
+          (previous.recurrenceEndDate ?? null) !== recurrenceEndDate;
 
         let cloudTaskName: string | null = previous?.cloudTaskName ?? null;
         const reminderSentAt: string | null = scheduleChanged ? null : (previous?.reminderSentAt ?? null);
         let warning: string | undefined;
 
         // Cancel previous pending Cloud Task whenever schedule changes, completed, or alert disabled
-        if (previous?.cloudTaskName && (scheduleChanged || isDone || reminderOffsetMinutes === null)) {
+        if (
+          previous?.cloudTaskName &&
+          (scheduleChanged || isDone || reminderOffsetMinutes === null || !reminderTargetISO)
+        ) {
           await cancelAgendaCloudTask(previous.cloudTaskName);
           cloudTaskName = null;
         }
 
-        // Schedule exact-time Google Cloud Task when open, alert enabled, and Telegram connected
+        // Schedule exact-time Google Cloud Task for the next upcoming alert
         if (!isDone && reminderTargetISO && telegramActive && (scheduleChanged || !cloudTaskName)) {
           const scheduled = await scheduleAgendaCloudTask({
             uid: verifiedUser.uid,
@@ -132,6 +158,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           time,
           ...(trimmedNote ? { note: trimmedNote } : {}),
           isDone,
+          ...(recurrence !== 'none' ? { recurrence } : {}),
+          ...(recurrenceEndDate ? { recurrenceEndDate } : {}),
+          ...(completedDates.length > 0 ? { completedDates } : {}),
           reminderOffsetMinutes,
           timezone,
           reminderTargetISO,
@@ -170,35 +199,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(404).json({ error: 'Agenda item not found.' });
         }
 
-        const nextDone = !target.isDone;
+        const nowISO = new Date().toISOString();
+        const occurrenceDate =
+          typeof body.occurrenceDate === 'string' && isValidISODateString(body.occurrenceDate)
+            ? body.occurrenceDate
+            : undefined;
+
+        const toggled = toggleAgendaItemCompletion(target, occurrenceDate, nowISO);
         let cloudTaskName = target.cloudTaskName ?? null;
+        let reminderTargetISO = target.reminderTargetISO ?? null;
+        let reminderSentAt = target.reminderSentAt ?? null;
         let warning: string | undefined;
 
-        if (nextDone && cloudTaskName) {
-          await cancelAgendaCloudTask(cloudTaskName);
-          cloudTaskName = null;
-        } else if (
-          !nextDone &&
-          target.reminderTargetISO &&
-          !target.reminderSentAt &&
-          telegramActive &&
-          !cloudTaskName
-        ) {
-          const scheduled = await scheduleAgendaCloudTask({
-            uid: verifiedUser.uid,
-            itemId: target.id,
-            reminderTargetISO: target.reminderTargetISO,
-            baseUrl,
+        if (isRepeatingAgendaItem(toggled)) {
+          const nextReminder = computeNextAgendaReminder({
+            date: toggled.date,
+            time: toggled.time,
+            recurrence: toggled.recurrence,
+            recurrenceEndDate: toggled.recurrenceEndDate,
+            completedDates: toggled.completedDates,
+            reminderOffsetMinutes: toggled.reminderOffsetMinutes,
+            timezone: toggled.timezone,
+            defaultReminderHour: sub?.reminderHour ?? 9,
           });
-          cloudTaskName = scheduled.taskName;
-          if (!scheduled.ok) warning = scheduled.reason;
+          const nextTargetISO = nextReminder?.reminderTargetISO ?? null;
+          const targetChanged = nextTargetISO !== reminderTargetISO;
+
+          if (cloudTaskName && (targetChanged || !nextTargetISO)) {
+            await cancelAgendaCloudTask(cloudTaskName);
+            cloudTaskName = null;
+          }
+
+          reminderTargetISO = nextTargetISO;
+          if (targetChanged) {
+            reminderSentAt = null;
+          }
+
+          if (reminderTargetISO && telegramActive && !cloudTaskName) {
+            const scheduled = await scheduleAgendaCloudTask({
+              uid: verifiedUser.uid,
+              itemId: toggled.id,
+              reminderTargetISO,
+              baseUrl,
+            });
+            cloudTaskName = scheduled.taskName;
+            if (!scheduled.ok) warning = scheduled.reason;
+          }
+        } else {
+          if (toggled.isDone && cloudTaskName) {
+            await cancelAgendaCloudTask(cloudTaskName);
+            cloudTaskName = null;
+          } else if (
+            !toggled.isDone &&
+            target.reminderTargetISO &&
+            !target.reminderSentAt &&
+            telegramActive &&
+            !cloudTaskName
+          ) {
+            const scheduled = await scheduleAgendaCloudTask({
+              uid: verifiedUser.uid,
+              itemId: target.id,
+              reminderTargetISO: target.reminderTargetISO,
+              baseUrl,
+            });
+            cloudTaskName = scheduled.taskName;
+            if (!scheduled.ok) warning = scheduled.reason;
+          }
         }
 
         const updatedItem: AgendaItem = {
-          ...target,
-          isDone: nextDone,
+          ...toggled,
+          reminderTargetISO,
+          reminderSentAt,
           cloudTaskName,
-          updatedAt: new Date().toISOString(),
         };
 
         const nextItems = sortAgendaItems(

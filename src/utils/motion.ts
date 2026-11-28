@@ -2,6 +2,20 @@ import type { Transition, Variants } from 'framer-motion';
 
 export const STUDIO_EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
+/**
+ * GPU-composited progress-fill transition matching STUDIO_EASE.
+ * Animates only compositor properties (transform, opacity) and background-color —
+ * zero layout reflow and zero per-bar JS animation overhead across large timelines.
+ */
+export const PROGRESS_FILL_TRANSITION =
+  'transition-[transform,opacity,background-color] duration-[420ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none';
+
+/** Clamps a completion percentage into [0, 100] for safe CSS transform math. */
+export function clampProgressPercent(progress: number): number {
+  if (!Number.isFinite(progress)) return 0;
+  return Math.max(0, Math.min(100, progress));
+}
+
 export const SPRING_SNAPPY: Transition = {
   type: 'spring',
   stiffness: 480,

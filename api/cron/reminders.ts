@@ -1,7 +1,12 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
-import { isWithinCloudTaskWindow, sanitizeAgendaItems } from '../../src/domain/agenda.js';
+import {
+  computeNextAgendaReminder,
+  isRepeatingAgendaItem,
+  isWithinCloudTaskWindow,
+  sanitizeAgendaItems,
+} from '../../src/domain/agenda.js';
 import {
   collectDueReminders,
   formatTelegramReminderMessage,
@@ -87,12 +92,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const updatedAgenda = [...agendaItems];
 
         for (let i = 0; i < updatedAgenda.length; i += 1) {
-          const item = updatedAgenda[i]!;
+          let item = updatedAgenda[i]!;
+          if (item.reminderOffsetMinutes === null || item.cloudTaskName) continue;
+
+          // If a repeating item's target fell in the past (e.g. while Telegram was paused), advance it cleanly
+          if (
+            isRepeatingAgendaItem(item) &&
+            (!item.reminderTargetISO || Date.parse(item.reminderTargetISO) <= now.getTime() - 60_000)
+          ) {
+            const refreshed = computeNextAgendaReminder({
+              date: item.date,
+              time: item.time,
+              recurrence: item.recurrence,
+              recurrenceEndDate: item.recurrenceEndDate,
+              completedDates: item.completedDates,
+              reminderOffsetMinutes: item.reminderOffsetMinutes,
+              timezone: item.timezone,
+              defaultReminderHour: sub.reminderHour ?? 9,
+              nowMs: now.getTime(),
+            });
+            item = {
+              ...item,
+              reminderTargetISO: refreshed?.reminderTargetISO ?? null,
+              reminderSentAt: null,
+              updatedAt: nowISO,
+            };
+            updatedAgenda[i] = item;
+            agendaMutated = true;
+          }
+
           if (
             !item.isDone &&
-            item.reminderOffsetMinutes !== null &&
             item.reminderTargetISO &&
-            !item.cloudTaskName &&
             !item.reminderSentAt &&
             isWithinCloudTaskWindow(item.reminderTargetISO, now.getTime())
           ) {

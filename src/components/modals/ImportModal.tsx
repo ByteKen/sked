@@ -192,27 +192,27 @@ export function ImportModal({ isOpen, onImport, onClose }: ImportModalProps) {
       onClose={onClose}
       title="Import Tasks from JSON"
       description="Paste JSON or upload a previously exported .json backup"
-      maxWidth="2xl"
+      maxWidth="xl"
       icon={
-        <div className="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
-          <FileCode weight="duotone" className="w-5 h-5 text-brand-600 dark:text-brand-400" />
+        <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+          <FileCode weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
         </div>
       }
       footer={
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs text-slate-500 dark:text-slate-400">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
             Tasks are appended atomically to your active workspace.
           </p>
-          <div className="flex items-center gap-2.5">
-            <Button variant="secondary" size="md" onClick={onClose}>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={onClose}>
               Cancel
             </Button>
             <Button
               variant="primary"
-              size="md"
+              size="sm"
               disabled={!canImport}
               onClick={handleConfirmImport}
-              leftIcon={<UploadSimple weight="duotone" className="w-4 h-4" />}
+              leftIcon={<UploadSimple weight="duotone" className="w-3.5 h-3.5" />}
             >
               Import Tasks
             </Button>
@@ -220,7 +220,7 @@ export function ImportModal({ isOpen, onImport, onClose }: ImportModalProps) {
         </div>
       }
     >
-      <div className="p-6 sm:p-7 space-y-5">
+      <div className="p-5 sm:p-6 space-y-4">
         {/* Action Bar */}
         <div className="flex flex-wrap items-center gap-2.5">
           <Button
@@ -343,7 +343,7 @@ export function ImportModal({ isOpen, onImport, onClose }: ImportModalProps) {
             spellCheck={false}
             placeholder={'{\n  "tasks": [\n    {\n      "name": "Kickoff",\n      "start": "2026-01-05",\n      "end": "2026-01-12"\n    }\n  ]\n}'}
             className={cn(
-              'w-full h-80 p-4 font-mono text-xs sm:text-[13px] leading-relaxed rounded-xl border resize-none transition focus:outline-none focus:ring-2',
+              'w-full h-64 p-3.5 font-mono text-xs leading-relaxed rounded-xl border resize-none transition focus:outline-none focus:ring-2',
               'bg-slate-50 dark:bg-canvas-dark text-slate-900 dark:text-slate-100 placeholder:text-slate-400',
               hasErrors
                 ? 'border-rose-400 focus:ring-rose-500/30'

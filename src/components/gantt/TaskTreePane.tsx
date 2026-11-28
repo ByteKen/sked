@@ -12,6 +12,7 @@ export interface TaskTreePaneProps {
   collapsedMap: Record<number, boolean>;
   selectedTaskId: number | null;
   showTaskDescriptions: boolean;
+  showProgressPercentages?: boolean;
   readOnly: boolean;
   isExpandedView: boolean;
   fullWidth?: boolean;
@@ -39,6 +40,7 @@ export const TaskTreePane = memo(
       collapsedMap,
       selectedTaskId,
       showTaskDescriptions,
+      showProgressPercentages = true,
       readOnly,
       isExpandedView,
       fullWidth = false,
@@ -151,6 +153,7 @@ export const TaskTreePane = memo(
                 readOnly={readOnly}
                 compact={isCompact}
                 showTaskDescriptions={showTaskDescriptions}
+                showProgressPercentages={showProgressPercentages}
                 onSelect={onSelectTask}
                 onHoverRowIndex={onHoverRowIndex}
                 onToggleCollapse={onToggleCollapse}

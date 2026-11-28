@@ -132,11 +132,21 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const showDependencyLines = usePreferencesStore((s) => s.showDependencyLines);
     const showSubtaskConnectors = usePreferencesStore((s) => s.showSubtaskConnectors);
     const storeShowTaskDescriptions = usePreferencesStore((s) => s.showTaskDescriptions);
+    const showBarTooltips = usePreferencesStore((s) => s.showBarTooltips);
+    const storeShowProgressPercentages = usePreferencesStore((s) => s.showProgressPercentages);
+    const storeShowTodayLine = usePreferencesStore((s) => s.showTodayLine);
+    const storeHighlightWeekends = usePreferencesStore((s) => s.highlightWeekends);
+    const storeShowCriticalPath = usePreferencesStore((s) => s.showCriticalPathByDefault);
+    const storeAutoCascade = usePreferencesStore((s) => s.autoCascadeDependencies);
 
-    const useLocalDescriptionToggle = readOnly || Boolean(viewPrefsOverride);
+    const useLocalViewToggles = readOnly || Boolean(viewPrefsOverride);
     const [localShowDescriptions, setLocalShowDescriptions] = useState<boolean>(
       Boolean(viewPrefsOverride?.showTaskDescriptions ?? storeShowTaskDescriptions),
     );
+    const [localShowCriticalPath, setLocalShowCriticalPath] = useState<boolean>(
+      storeShowCriticalPath,
+    );
+    const [localAutoCascade, setLocalAutoCascade] = useState<boolean>(storeAutoCascade);
 
     const viewPrefs: SharedChartViewPrefs = viewPrefsOverride ?? {
       useRoundedSubtasks,
@@ -146,14 +156,23 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       showDependencyLines,
       showSubtaskConnectors,
       showTaskDescriptions: storeShowTaskDescriptions,
+      showProgressPercentages: storeShowProgressPercentages,
+      showTodayLine: storeShowTodayLine,
+      highlightWeekends: storeHighlightWeekends,
     };
 
-    const showTaskDescriptions = useLocalDescriptionToggle
+    const showTaskDescriptions = useLocalViewToggles
       ? localShowDescriptions
       : storeShowTaskDescriptions;
+    const showProgressPercentages =
+      viewPrefsOverride?.showProgressPercentages ?? storeShowProgressPercentages;
+    const showTodayLine = viewPrefsOverride?.showTodayLine ?? storeShowTodayLine;
+    const highlightWeekends = viewPrefsOverride?.highlightWeekends ?? storeHighlightWeekends;
+    const showCriticalPath = useLocalViewToggles ? localShowCriticalPath : storeShowCriticalPath;
+    const autoCascade = useLocalViewToggles ? localAutoCascade : storeAutoCascade;
 
     const handleToggleTaskDescriptions = useCallback(() => {
-      if (useLocalDescriptionToggle) {
+      if (useLocalViewToggles) {
         setLocalShowDescriptions((prev) => !prev);
         return;
       }
@@ -163,7 +182,23 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
       if (currentWorkspaceId) {
         void syncSharedPreferences(currentWorkspaceId, prefStore.getPreferencesSnapshot());
       }
-    }, [useLocalDescriptionToggle]);
+    }, [useLocalViewToggles]);
+
+    const handleToggleCriticalPath = useCallback(() => {
+      if (useLocalViewToggles) {
+        setLocalShowCriticalPath((prev) => !prev);
+        return;
+      }
+      usePreferencesStore.getState().toggleShowCriticalPathByDefault();
+    }, [useLocalViewToggles]);
+
+    const handleToggleAutoCascade = useCallback(() => {
+      if (useLocalViewToggles) {
+        setLocalAutoCascade((prev) => !prev);
+        return;
+      }
+      usePreferencesStore.getState().toggleAutoCascadeDependencies();
+    }, [useLocalViewToggles]);
 
     const handleSelectTask = useCallback(
       (id: number) => {
@@ -177,9 +212,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const [zoom, setZoom] = useState(1);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [isExpandedView, setIsExpandedView] = useState(false);
-    const [showCriticalPath, setShowCriticalPath] = useState(false);
     const [showBaseline, setShowBaseline] = useState(false);
-    const [autoCascade, setAutoCascade] = useState(true);
     const [localCollapsed, setLocalCollapsed] = useState<Record<number, boolean>>({});
 
     // Imperative refs for zero-rerender hover synchronization & floating tooltip
@@ -312,6 +345,10 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
     const handleBarHover = useCallback(
       (task: FlatTask, durationDays: number, rect: DOMRect, rowIndex: number) => {
         handleHoverRowIndex(rowIndex);
+        if (!showBarTooltips) {
+          tooltipRef.current?.hide();
+          return;
+        }
         const baselineEntry = showBaseline && baseline ? (baseline.entries[task.id] ?? null) : null;
         const slipDays = baselineEntry ? computeTaskBaselineSlipDays(task, baseline) : null;
         const isCritical = showCriticalPath ? criticalPath.criticalTaskIds.has(task.id) : undefined;
@@ -330,7 +367,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
           daysUntilDue,
         });
       },
-      [handleHoverRowIndex, showBaseline, baseline, showCriticalPath, criticalPath],
+      [handleHoverRowIndex, showBarTooltips, showBaseline, baseline, showCriticalPath, criticalPath],
     );
 
     const handleRescheduleFromTimeline = useCallback(
@@ -544,10 +581,10 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
           allCollapsed={allCollapsed}
           onToggleCollapseAll={handleToggleCollapseAll}
           showCriticalPath={showCriticalPath}
-          onToggleCriticalPath={() => setShowCriticalPath((prev) => !prev)}
+          onToggleCriticalPath={handleToggleCriticalPath}
           criticalTaskCount={criticalPath.criticalTaskIds.size}
           autoCascade={autoCascade}
-          onToggleAutoCascade={!readOnly && onRescheduleTask ? () => setAutoCascade((v) => !v) : undefined}
+          onToggleAutoCascade={!readOnly && onRescheduleTask ? handleToggleAutoCascade : undefined}
           baseline={baseline}
           showBaseline={showBaseline}
           onToggleShowBaseline={() => setShowBaseline((prev) => !prev)}
@@ -574,6 +611,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
               collapsedMap={readOnly ? localCollapsed : EMPTY_COLLAPSED_MAP}
               selectedTaskId={selectedTaskId}
               showTaskDescriptions={showTaskDescriptions}
+              showProgressPercentages={showProgressPercentages}
               readOnly={readOnly}
               isExpandedView={isExpandedView}
               fullWidth={isMobile && mobileView === 'list'}
@@ -634,8 +672,9 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                 <TimelineHeader
                   columns={columns}
                   headerHeight={HEADER_HEIGHT}
-                  todayOffsetPx={todayOffsetPx}
+                  todayOffsetPx={showTodayLine ? todayOffsetPx : null}
                   showMonthMarkers={granularity === 'days'}
+                  highlightWeekends={highlightWeekends}
                 />
 
                 {/* Timeline Body with strict stacking isolation */}
@@ -646,7 +685,8 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     visibleTasks={visibleTasks}
                     rowHeight={rowHeight}
                     selectedRowIndex={selectedRowIndex}
-                    todayOffsetPx={todayOffsetPx}
+                    todayOffsetPx={showTodayLine ? todayOffsetPx : null}
+                    highlightWeekends={highlightWeekends}
                     onSelectTask={handleSelectTask}
                     onHoverRowIndex={handleHoverRowIndex}
                   />
@@ -669,6 +709,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     showDependencyLines={viewPrefs.showDependencyLines}
                     showSubtaskConnectors={viewPrefs.showSubtaskConnectors}
                     showTaskDescriptions={showTaskDescriptions}
+                    showProgressPercentages={showProgressPercentages}
                     showBaseline={showBaseline}
                     showCriticalPath={showCriticalPath}
                     criticalEdgeKeys={criticalPath.criticalEdgeKeys}
@@ -693,6 +734,7 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     taskLabelPosition={viewPrefs.taskLabelPosition}
                     subtaskLabelPosition={viewPrefs.subtaskLabelPosition}
                     showTaskDescriptions={showTaskDescriptions}
+                    showProgressPercentages={showProgressPercentages}
                     selectedTaskId={selectedTaskId}
                     onSelectTask={handleSelectTask}
                     onTaskActivate={onTaskActivate}
