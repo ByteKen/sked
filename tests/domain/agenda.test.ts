@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAgendaFiredKey,
   buildCalendarMonthGrid,
   collectWorkspaceDeadlinesForCalendar,
   computeReminderTargetISO,
+  findDueAndNextInAppReminders,
   formatAgendaTelegramMessage,
   formatClockTime12h,
   getAgendaDeliveryStatus,
+  getAgendaReminderHeading,
   isDeferredBeyondCloudTaskWindow,
   isWithinCloudTaskWindow,
   localDateTimeToUtcMs,
@@ -209,11 +212,18 @@ describe('agenda & calendar pure domain policy', () => {
     );
 
     const html = formatAgendaTelegramMessage(item, 'https://skedspace.vercel.app/');
-    expect(html).toContain('Starting in 15 minutes');
+    expect(html).toContain('Reminder — Starting in 15 minutes');
     expect(html).toContain('Demo &lt;Final&gt; &amp; Q&amp;A');
     expect(html).toContain('7:00 PM');
     expect(html).toContain('Bring &lt;slides&gt;');
     expect(html).toContain('https://skedspace.vercel.app');
+
+    expect(getAgendaReminderHeading({ reminderOffsetMinutes: 0 }).text).toBe(
+      'Reminder — Happening now',
+    );
+    expect(getAgendaReminderHeading({ reminderOffsetMinutes: 30 }).text).toBe(
+      'Reminder — Starting in 30 minutes',
+    );
 
     const unsafe = formatAgendaTelegramMessage(item, 'javascript:alert(1)');
     expect(unsafe).not.toContain('<a href=');
@@ -222,5 +232,27 @@ describe('agenda & calendar pure domain policy', () => {
       type: 'agenda_done',
       itemId: 'ag_abc123',
     });
+
+    // In-app reminder selector catches due alerts, skips fired/stale ones, and computes next exact delay
+    const nowMs = Date.parse('2026-11-28T10:45:10.000Z');
+    const futureItem: AgendaItem = {
+      ...item,
+      id: 'ag_future',
+      reminderTargetISO: '2026-11-28T11:00:10.000Z', // 15 minutes in future
+    };
+    const staleItem: AgendaItem = {
+      ...item,
+      id: 'ag_stale',
+      reminderTargetISO: '2026-11-28T09:00:00.000Z', // >2 min ago -> do not spam on login
+    };
+
+    const first = findDueAndNextInAppReminders([item, futureItem, staleItem], new Set(), nowMs);
+    expect(first.due.map((i) => i.id)).toEqual(['ag_abc123']);
+    expect(first.nextDelayMs).toBe(15 * 60_000);
+
+    const fired = new Set([buildAgendaFiredKey(item)]);
+    const second = findDueAndNextInAppReminders([item, futureItem], fired, nowMs);
+    expect(second.due).toEqual([]);
+    expect(second.nextDelayMs).toBe(15 * 60_000);
   });
 });

@@ -4,6 +4,7 @@ import {
   CalendarBlank,
   Clock,
   PaperPlaneTilt,
+  SpeakerHigh,
   Trash,
   WarningCircle,
   X,
@@ -18,6 +19,7 @@ import {
 } from '@/domain/agenda';
 import type { AgendaItem, AgendaItemDraft, AgendaReminderOffset } from '@/types';
 import { cn } from '@/utils/cn';
+import { playReminderChime } from '@/utils/reminderSound';
 
 const REMINDER_OPTIONS: Array<{ value: AgendaReminderOffset | null; label: string }> = [
   { value: null, label: 'No alert' },
@@ -270,10 +272,22 @@ export function AgendaItemModal({
 
         {/* Telegram Exact-Time Reminder */}
         <div>
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-            <BellRinging weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
-            Telegram Reminder
-          </span>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <BellRinging weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+              Reminder Alert
+            </span>
+            {reminderOffset !== null && (
+              <button
+                type="button"
+                onClick={() => playReminderChime({ force: true })}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300 cursor-pointer"
+              >
+                <SpeakerHigh weight="duotone" className="w-3.5 h-3.5" />
+                Preview chime
+              </button>
+            )}
+          </div>
           <div
             role="group"
             aria-label="Telegram reminder lead time"

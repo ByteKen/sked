@@ -1,6 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { MotionConfig } from 'framer-motion';
 import { Navigate, Route, Routes, useLocation, useSearchParams } from 'react-router-dom';
+import { AgendaReminderBanner } from '@/components/calendar/AgendaReminderBanner';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { ToastContainer } from '@/components/ui/ToastContainer';
 import { HomePage } from '@/pages/HomePage';
@@ -153,6 +154,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
+      <AgendaReminderBanner />
       <ToastContainer />
     </MotionConfig>
   );

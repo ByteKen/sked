@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowSquareOut,
   BellRinging,
@@ -11,6 +11,8 @@ import {
   PaperPlaneTilt,
   PencilSimple,
   Plus,
+  SpeakerHigh,
+  SpeakerSlash,
   Trash,
   WarningCircle,
 } from '@phosphor-icons/react';
@@ -28,6 +30,12 @@ import { useAgendaStore } from '@/store/agendaStore';
 import { toast } from '@/store/toastStore';
 import type { AgendaItem, AgendaItemDraft, Task, TaskStatus, WorkspaceMap } from '@/types';
 import { cn } from '@/utils/cn';
+import {
+  isReminderSoundEnabled,
+  playReminderChime,
+  setReminderSoundEnabled,
+  subscribeReminderSoundPreference,
+} from '@/utils/reminderSound';
 
 type CalendarFilterMode = 'all' | 'agenda' | 'deadlines';
 
@@ -102,6 +110,21 @@ export function CalendarView({
   const [filterMode, setFilterMode] = useState<CalendarFilterMode>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<AgendaItem | null>(null);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => isReminderSoundEnabled());
+
+  useEffect(() => subscribeReminderSoundPreference(setSoundEnabled), []);
+
+  const handleToggleSound = () => {
+    const next = !soundEnabled;
+    setReminderSoundEnabled(next);
+    setSoundEnabled(next);
+    if (next) {
+      playReminderChime({ force: true });
+      toast.info('In-app chime enabled', 'You will hear a soft bell when reminders fire.');
+    } else {
+      toast.info('In-app chime muted', 'Banners will still appear silently while Sked is open.');
+    }
+  };
 
   const telegramConnected = Boolean(telegramConfig?.connected && telegramConfig?.enabled);
   const defaultTimezone = telegramConfig?.timezone || getBrowserTimeZone();
@@ -287,6 +310,26 @@ export function CalendarView({
               );
             })}
           </div>
+
+          <button
+            type="button"
+            onClick={handleToggleSound}
+            aria-label={soundEnabled ? 'Mute in-app reminder chime' : 'Enable in-app reminder chime'}
+            title={soundEnabled ? 'In-app alert chime: On (click to mute)' : 'In-app alert chime: Muted (click to turn on)'}
+            className={cn(
+              'inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer',
+              soundEnabled
+                ? 'border-slate-200/90 dark:border-white/10 bg-white dark:bg-surface-dark text-slate-700 hover:border-brand-400 dark:text-slate-200'
+                : 'border-slate-200/80 dark:border-white/[0.08] bg-slate-100/80 dark:bg-white/[0.04] text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200',
+            )}
+          >
+            {soundEnabled ? (
+              <SpeakerHigh weight="duotone" className="w-4 h-4 text-brand-600 dark:text-brand-400" />
+            ) : (
+              <SpeakerSlash weight="duotone" className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{soundEnabled ? 'Chime On' : 'Muted'}</span>
+          </button>
 
           <Button
             variant="primary"

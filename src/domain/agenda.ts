@@ -17,6 +17,8 @@ export interface CalendarWorkspaceSummary {
 export const ALLOWED_AGENDA_REMINDER_OFFSETS: readonly AgendaReminderOffset[] = [0, 15, 30, 60];
 export const MAX_AGENDA_ITEMS = 250;
 export const CLOUD_TASK_MAX_LEAD_MS = 29 * 86_400_000; // 29-day safe buffer under GCP's 30-day limit
+export const IN_APP_REMINDER_CATCHUP_MS = 2 * 60_000; // 2-minute grace window for tab wakeups
+const MAX_SAFE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // Cap setTimeout safely well below 32-bit max
 
 export const AGENDA_REMINDER_LABELS: Record<string, string> = {
   none: 'No alert',
@@ -385,19 +387,77 @@ function formatReadableAgendaDate(isoDate: string): string {
   }).format(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
 }
 
+export function buildAgendaFiredKey(item: Pick<AgendaItem, 'id' | 'reminderTargetISO'>): string {
+  return `${item.id}:${item.reminderTargetISO ?? ''}`;
+}
+
+export function getAgendaReminderHeading(
+  item: Pick<AgendaItem, 'reminderOffsetMinutes'>,
+): { emoji: string; text: string } {
+  if (item.reminderOffsetMinutes === 15) {
+    return { emoji: '⏰', text: 'Reminder — Starting in 15 minutes' };
+  }
+  if (item.reminderOffsetMinutes === 30) {
+    return { emoji: '⏰', text: 'Reminder — Starting in 30 minutes' };
+  }
+  if (item.reminderOffsetMinutes === 60) {
+    return { emoji: '⏰', text: 'Reminder — Starting in 1 hour' };
+  }
+  if (item.reminderOffsetMinutes === 0) {
+    return { emoji: '🔔', text: 'Reminder — Happening now' };
+  }
+  return { emoji: '⏰', text: 'Reminder' };
+}
+
+/**
+ * Pure local scheduler selector for in-app alerts while Sked is open.
+ * Returns any open agenda items whose exact alert instant fell inside `[nowMs - catchupMs, nowMs]`
+ * and have not yet fired, plus the exact millisecond delay until the soonest upcoming alert.
+ */
+export function findDueAndNextInAppReminders(
+  items: readonly AgendaItem[],
+  firedKeys: ReadonlySet<string>,
+  nowMs: number,
+  catchupWindowMs = IN_APP_REMINDER_CATCHUP_MS,
+): { due: AgendaItem[]; nextDelayMs: number | null } {
+  const due: AgendaItem[] = [];
+  let soonestFutureMs: number | null = null;
+
+  for (const item of items) {
+    if (item.isDone || item.reminderOffsetMinutes === null || !item.reminderTargetISO) {
+      continue;
+    }
+    const firedKey = buildAgendaFiredKey(item);
+    if (firedKeys.has(firedKey)) continue;
+
+    const targetMs = Date.parse(item.reminderTargetISO);
+    if (Number.isNaN(targetMs)) continue;
+
+    if (targetMs <= nowMs && targetMs >= nowMs - catchupWindowMs) {
+      due.push(item);
+    } else if (targetMs > nowMs) {
+      if (soonestFutureMs === null || targetMs < soonestFutureMs) {
+        soonestFutureMs = targetMs;
+      }
+    }
+  }
+
+  const nextDelayMs =
+    soonestFutureMs !== null
+      ? Math.max(250, Math.min(soonestFutureMs - nowMs, MAX_SAFE_TIMEOUT_MS))
+      : null;
+
+  return { due, nextDelayMs };
+}
+
 export function formatAgendaTelegramMessage(item: AgendaItem, appBaseUrl?: string): string {
   const safeTitle = escapeTelegramHtml(item.title);
   const dateLabel = formatReadableAgendaDate(item.date);
   const timeLabel = item.time ? formatClockTime12h(item.time) : 'All day';
-
-  let leadTag = '⏰ Scheduled Reminder';
-  if (item.reminderOffsetMinutes === 15) leadTag = '⏰ Starting in 15 minutes';
-  else if (item.reminderOffsetMinutes === 30) leadTag = '⏰ Starting in 30 minutes';
-  else if (item.reminderOffsetMinutes === 60) leadTag = '⏰ Starting in 1 hour';
-  else if (item.reminderOffsetMinutes === 0) leadTag = '🔔 Happening now';
+  const heading = getAgendaReminderHeading(item);
 
   const lines: string[] = [
-    `<b>${leadTag}</b>`,
+    `<b>${heading.emoji} ${escapeTelegramHtml(heading.text)}</b>`,
     '',
     `📌 <b>${safeTitle}</b>`,
     `🗓 ${escapeTelegramHtml(dateLabel)} · <b>${escapeTelegramHtml(timeLabel)}</b>`,
