@@ -7,7 +7,6 @@ import {
   CircleNotch,
   CloudCheck,
   FilePdf,
-  GlobeHemisphereWest,
   Info,
   Kanban,
   Path,

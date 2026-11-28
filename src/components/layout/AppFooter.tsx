@@ -131,7 +131,7 @@ export function AppFooter({ compact = false, className }: AppFooterProps) {
                 className="inline-flex items-center gap-1.5 hover:text-slate-900 dark:hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 rounded"
               >
                 <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Status</span>
+                <span>System Status</span>
               </Link>
             )}
           </nav>

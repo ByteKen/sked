@@ -117,7 +117,6 @@ function HomeCalendarSkeleton() {
         </div>
         <div className="flex items-center gap-2.5">
           <Skeleton className="h-8 w-44 rounded-lg" />
-          <Skeleton className="h-9 w-28 rounded-xl" />
         </div>
       </div>
 

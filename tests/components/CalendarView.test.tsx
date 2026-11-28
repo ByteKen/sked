@@ -120,7 +120,7 @@ describe('CalendarView & AgendaItemModal', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Add Agenda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
     const titleInput = screen.getByLabelText(/^Title$/i);
     fireEvent.change(titleInput, { target: { value: 'Study Session' } });
     fireEvent.change(screen.getByLabelText(/^Time/i), { target: { value: '19:00' } });
@@ -180,7 +180,7 @@ describe('CalendarView & AgendaItemModal', () => {
     expect(mockToggleDone).toHaveBeenCalledWith('ag_daily', '2026-11-28');
 
     // Creating a weekly repeating item from AgendaItemModal sends recurrence + optional end date
-    fireEvent.click(screen.getByRole('button', { name: /Add Agenda/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Add$/i }));
     fireEvent.change(screen.getByLabelText(/^Title$/i), { target: { value: 'Weekly Retro' } });
     fireEvent.click(screen.getByRole('button', { name: /^Weekly$/i }));
     fireEvent.change(screen.getByLabelText(/End repeat/i), { target: { value: '2026-12-31' } });

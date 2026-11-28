@@ -292,14 +292,6 @@ export function CalendarView({
               );
             })}
           </div>
-          <Button
-            variant="primary"
-            size="md"
-            onClick={() => handleOpenNewForDate(selectedDate)}
-            leftIcon={<Plus className="w-4 h-4" weight="bold" />}
-          >
-            Add Agenda
-          </Button>
         </div>
       </div>
 
@@ -465,6 +457,14 @@ export function CalendarView({
                 {selectedDeadlines.length === 1 ? 'deadline' : 'deadlines'}
               </p>
             </div>
+            <Button
+              variant="subtle"
+              size="sm"
+              onClick={() => handleOpenNewForDate(selectedDate)}
+              leftIcon={<Plus className="w-3.5 h-3.5" weight="bold" />}
+            >
+              Add
+            </Button>
           </div>
 
           <div className="p-4 space-y-5 max-h-[640px] overflow-y-auto">
