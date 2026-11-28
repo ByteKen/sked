@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { sanitizeAgendaItems } from '../../src/domain/agenda.js';
 import { escapeTelegramHtml, getLocalDatePartsInTimezone } from '../../src/domain/reminders.js';
 import {
   BOT_COMMANDS,
@@ -17,6 +18,7 @@ import {
   type BotViewPayload,
   type TelegramWorkspaceBundle,
 } from '../../src/domain/telegramBot.js';
+import { cancelAgendaCloudTask } from '../_lib/cloudTasks.js';
 import {
   extractUserWorkspaces,
   getAdminDb,
@@ -327,6 +329,49 @@ async function handleCallbackQuery(
       }
 
       await answerTelegramCallbackQuery(cb.id, `✅ Completed "${updatedTask.name}"!`);
+      return;
+    }
+
+    case 'agenda_done': {
+      const userRef = db.collection('users').doc(sub.uid);
+      const userSnap = await userRef.get();
+      const items = sanitizeAgendaItems(userSnap.data()?.agendaItems);
+      const target = items.find((entry) => entry.id === parsed.itemId);
+      if (!target) {
+        await answerTelegramCallbackQuery(cb.id, 'Agenda item already removed.', true);
+        return;
+      }
+
+      if (target.cloudTaskName) {
+        await cancelAgendaCloudTask(target.cloudTaskName);
+      }
+
+      const nowISO = new Date().toISOString();
+      const nextItems = items.map((entry) =>
+        entry.id === target.id
+          ? { ...entry, isDone: true, cloudTaskName: null, updatedAt: nowISO }
+          : entry,
+      );
+
+      await userRef.set(
+        {
+          agendaItems: nextItems,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      await renderViewToChat(
+        chatIdStr,
+        {
+          text: `<b>✅ Completed Personal Agenda</b>\n\n<s>${escapeTelegramHtml(target.title)}</s>`,
+          replyMarkup: {
+            inline_keyboard: [[{ text: '📅 Today', callback_data: 'to' }]],
+          },
+        },
+        messageId,
+      );
+      await answerTelegramCallbackQuery(cb.id, `✅ Marked "${target.title}" done!`);
       return;
     }
   }

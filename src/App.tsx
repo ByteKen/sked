@@ -11,6 +11,7 @@ import { StatusPage } from '@/pages/StatusPage';
 import { WorkspacePage } from '@/pages/WorkspacePage';
 import { sanitizeInternalRedirectPath } from '@/domain/navigation';
 import { userDocumentSync } from '@/services/userDocumentSync';
+import { useAgendaStore } from '@/store/agendaStore';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
@@ -86,6 +87,8 @@ export default function App() {
   const cleanupWorkspaces = useWorkspaceStore((s) => s.cleanup);
   const initPreferences = usePreferencesStore((s) => s.initPreferences);
   const cleanupPreferences = usePreferencesStore((s) => s.cleanup);
+  const initAgenda = useAgendaStore((s) => s.initAgenda);
+  const cleanupAgenda = useAgendaStore((s) => s.cleanup);
 
   useEffect(() => {
     const unsubscribe = initAuth();
@@ -101,12 +104,15 @@ export default function App() {
     userDocumentSync.start(user.id);
     const unsubWorkspaces = initWorkspaces();
     const unsubPrefs = initPreferences();
+    const unsubAgenda = initAgenda();
 
     return () => {
       unsubWorkspaces();
       unsubPrefs();
+      unsubAgenda();
       cleanupWorkspaces();
       cleanupPreferences();
+      cleanupAgenda();
       userDocumentSync.stop();
     };
   }, [
@@ -114,8 +120,10 @@ export default function App() {
     user?.id,
     initWorkspaces,
     initPreferences,
+    initAgenda,
     cleanupWorkspaces,
     cleanupPreferences,
+    cleanupAgenda,
   ]);
 
   return (

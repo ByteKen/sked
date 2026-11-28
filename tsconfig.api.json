@@ -10,9 +10,11 @@
   },
   "include": [
     "api/**/*.ts",
+    "src/domain/agenda.ts",
     "src/domain/reminders.ts",
     "src/domain/systemStatus.ts",
     "src/domain/telegramBot.ts",
+    "src/types/agenda.ts",
     "src/types/task.ts"
   ]
 }

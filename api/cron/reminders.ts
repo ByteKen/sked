@@ -1,5 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { FieldValue } from 'firebase-admin/firestore';
+import { isWithinCloudTaskWindow, sanitizeAgendaItems } from '../../src/domain/agenda.js';
 import {
   collectDueReminders,
   formatTelegramReminderMessage,
@@ -7,6 +9,7 @@ import {
   pruneSentReminders,
 } from '../../src/domain/reminders.js';
 import { buildReminderAlertReplyMarkup } from '../../src/domain/telegramBot.js';
+import { getCloudTasksConfig, scheduleAgendaCloudTask } from '../_lib/cloudTasks.js';
 import {
   extractUserWorkspaces,
   getAdminDb,
@@ -53,6 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let skippedWrongHour = 0;
   let blockedUsers = 0;
   let failedSends = 0;
+  let queuedDeferredAgenda = 0;
+  const cloudTasksEnabled = Boolean(getCloudTasksConfig() && baseUrl.startsWith('https://'));
 
   try {
     const db = getAdminDb();
@@ -73,8 +78,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const userSnap = await db.collection('users').doc(sub.uid).get();
       if (!userSnap.exists) continue;
+      const userData = userSnap.data();
 
-      const workspaces = extractUserWorkspaces(userSnap.data());
+      // Daily zero-polling handoff: enqueue any long-horizon (>29d) agenda reminders now inside Cloud Tasks' window
+      if (mode === 'daily' && cloudTasksEnabled && Array.isArray(userData?.agendaItems)) {
+        const agendaItems = sanitizeAgendaItems(userData.agendaItems);
+        let agendaMutated = false;
+        const updatedAgenda = [...agendaItems];
+
+        for (let i = 0; i < updatedAgenda.length; i += 1) {
+          const item = updatedAgenda[i]!;
+          if (
+            !item.isDone &&
+            item.reminderOffsetMinutes !== null &&
+            item.reminderTargetISO &&
+            !item.cloudTaskName &&
+            !item.reminderSentAt &&
+            isWithinCloudTaskWindow(item.reminderTargetISO, now.getTime())
+          ) {
+            const scheduled = await scheduleAgendaCloudTask({
+              uid: sub.uid,
+              itemId: item.id,
+              reminderTargetISO: item.reminderTargetISO,
+              baseUrl,
+            });
+            if (scheduled.ok && scheduled.taskName) {
+              updatedAgenda[i] = { ...item, cloudTaskName: scheduled.taskName, updatedAt: nowISO };
+              agendaMutated = true;
+              queuedDeferredAgenda += 1;
+            }
+          }
+        }
+
+        if (agendaMutated) {
+          await db
+            .collection('users')
+            .doc(sub.uid)
+            .set({ agendaItems: updatedAgenda, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+            .catch((err) => console.error(`Deferred agenda handoff save failed for uid=${sub.uid}:`, err));
+        }
+      }
+
+      const workspaces = extractUserWorkspaces(userData);
       if (workspaces.length === 0) continue;
 
       const existingSent = sub.sentReminders ?? {};
@@ -128,6 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       skippedWrongHour,
       blockedUsers,
       failedSends,
+      queuedDeferredAgenda,
       ranAt: nowISO,
     });
   } catch (err) {

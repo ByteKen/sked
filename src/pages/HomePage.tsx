@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowUpRight,
   CalendarBlank,
+  CalendarDots,
   CheckCircle,
   GlobeHemisphereWest,
   MagnifyingGlass,
@@ -15,6 +16,7 @@ import {
   X,
 } from '@phosphor-icons/react';
 import { motion } from 'framer-motion';
+import { CalendarView } from '@/components/calendar/CalendarView';
 import { FocusDashboardPanel } from '@/components/dashboard/FocusDashboardPanel';
 import { AppFooter } from '@/components/layout/AppFooter';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
@@ -32,14 +34,16 @@ import { formatISODate, getTodayLocal } from '@/domain/timeline';
 import { validateWorkspaceName } from '@/domain/validation';
 import { subscribeToSharedWithMeCharts } from '@/services/shareRepository';
 import { userDocumentSync } from '@/services/userDocumentSync';
+import { useAgendaStore } from '@/store/agendaStore';
 import { useAuthStore } from '@/store/authStore';
 import { toast } from '@/store/toastStore';
 import { useWorkspaceStore } from '@/store/workspaceStore';
 import type { SharedChartAccess, Task, TaskStatus, Workspace } from '@/types';
 import { cn } from '@/utils/cn';
-import { FADE_UP_ITEM, STAGGER_CONTAINER } from '@/utils/motion';
+import { FADE_UP_ITEM, SPRING_SNAPPY, STAGGER_CONTAINER } from '@/utils/motion';
 
 type WorkspaceHealthFilter = 'all' | 'attention' | 'on-track' | 'completed';
+type HomeDashboardTab = 'workspaces' | 'calendar';
 
 const SUGGESTIONS = ['Product Roadmap 2026', 'Website Redesign', 'Sprint Launch Plan', 'Research Timeline'];
 
@@ -52,8 +56,10 @@ function getGreeting(): string {
 
 export function HomePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const agendaItems = useAgendaStore((s) => s.items);
 
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspaceStats = useWorkspaceStore((s) => s.workspaceStats);
@@ -64,6 +70,9 @@ export function HomePage() {
   const restoreWorkspaceTasksSnapshot = useWorkspaceStore((s) => s.restoreWorkspaceTasksSnapshot);
   const deleteWorkspace = useWorkspaceStore((s) => s.deleteWorkspace);
 
+  const [activeTab, setActiveTab] = useState<HomeDashboardTab>(() =>
+    searchParams.get('tab') === 'calendar' ? 'calendar' : 'workspaces',
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [healthFilter, setHealthFilter] = useState<WorkspaceHealthFilter>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -103,6 +112,20 @@ export function HomePage() {
   );
 
   const todayISO = useMemo(() => formatISODate(getTodayLocal()), []);
+
+  const todayOpenAgendaCount = useMemo(
+    () => agendaItems.filter((item) => item.date === todayISO && !item.isDone).length,
+    [agendaItems, todayISO],
+  );
+
+  const handleSelectTab = (tab: HomeDashboardTab) => {
+    setActiveTab(tab);
+    if (tab === 'calendar') {
+      setSearchParams({ tab: 'calendar' }, { replace: true });
+    } else if (searchParams.has('tab')) {
+      setSearchParams({}, { replace: true });
+    }
+  };
 
   const portfolioFocus = useMemo(
     () => buildPortfolioFocusSummary(workspaces, workspaceTasks, todayISO),
@@ -328,7 +351,7 @@ export function HomePage() {
               </p>
             </div>
 
-            {workspaceList.length > 0 && (
+            {workspaceList.length > 0 && activeTab === 'workspaces' && (
               <Button
                 variant="primary"
                 size="lg"
@@ -339,10 +362,81 @@ export function HomePage() {
               </Button>
             )}
           </motion.div>
+
+          {/* Home Dashboard Tabs: Workspaces | Calendar */}
+          <div className="mt-7 flex items-center justify-between gap-3 flex-wrap">
+            <div
+              role="tablist"
+              aria-label="Home sections"
+              className="inline-flex items-center p-1 rounded-xl bg-slate-200/70 dark:bg-white/[0.05] border border-slate-200/90 dark:border-white/[0.08]"
+            >
+              {(
+                [
+                  { id: 'workspaces', label: 'Workspaces', icon: Stack },
+                  { id: 'calendar', label: 'Calendar', icon: CalendarDots },
+                ] as const
+              ).map((tab) => {
+                const active = activeTab === tab.id;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => handleSelectTab(tab.id)}
+                    className={cn(
+                      'relative inline-flex items-center gap-2 h-9 px-4 rounded-lg text-xs sm:text-[13px] font-semibold transition-colors cursor-pointer',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500',
+                      active
+                        ? 'text-slate-900 dark:text-white'
+                        : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100',
+                    )}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="home-dashboard-tab-pill"
+                        transition={SPRING_SNAPPY}
+                        className="absolute inset-0 rounded-lg bg-white dark:bg-surface-elevated border border-slate-200/90 dark:border-white/[0.12] shadow-surface-sm"
+                      />
+                    )}
+                    <span className="relative z-10 inline-flex items-center gap-2">
+                      <Icon
+                        weight="duotone"
+                        className={cn(
+                          'w-4 h-4',
+                          active
+                            ? 'text-brand-600 dark:text-brand-400'
+                            : 'text-slate-400 dark:text-slate-500',
+                        )}
+                      />
+                      <span>{tab.label}</span>
+                      {tab.id === 'calendar' && todayOpenAgendaCount > 0 && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-brand-500/15 text-brand-700 dark:text-brand-300 font-mono text-[10px] font-bold tabular-nums leading-none">
+                          {todayOpenAgendaCount}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </motion.div>
 
-        {/* Workspaces Grid or First-Time Onboarding */}
-        {workspaceList.length > 0 ? (
+        {/* Calendar Tab OR Workspaces Grid */}
+        {activeTab === 'calendar' ? (
+          <CalendarView
+            workspaces={workspaces}
+            workspaceTasks={workspaceTasks}
+            todayISO={todayISO}
+            onOpenTask={(wsId, taskId) => navigate(`/workspace/${wsId}?task=${taskId}`)}
+            onUpdateTaskStatus={(wsId, taskId, status) =>
+              void handleFocusStatusUpdate(wsId, taskId, status)
+            }
+            onOpenSettings={() => setShowSettingsModal(true)}
+          />
+        ) : workspaceList.length > 0 ? (
           <>
             {aggregateStats.totalTasks > 0 && (
               <FocusDashboardPanel
@@ -567,7 +661,7 @@ export function HomePage() {
         )}
 
         {/* Shared With Me (Invited Collaborative Workspaces) */}
-        {sharedWithMe.length > 0 && (
+        {activeTab === 'workspaces' && sharedWithMe.length > 0 && (
           <section aria-label="Shared with me" className="mt-12">
             <div className="flex items-center justify-between gap-3 mb-5 pb-3 border-b border-slate-200/80 dark:border-white/[0.07]">
               <div className="flex items-center gap-2">

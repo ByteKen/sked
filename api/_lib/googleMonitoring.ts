@@ -1,80 +1,11 @@
-import { createSign } from 'node:crypto';
 import type { RawMonitoringTimeSeries } from '../../src/domain/systemStatus.js';
-import { getServiceAccountCredentials } from './firebaseAdmin.js';
+import { getGoogleAccessToken } from './googleAuth.js';
 
-const GOOGLE_TOKEN_URI = 'https://oauth2.googleapis.com/token';
 const MONITORING_READ_SCOPE = 'https://www.googleapis.com/auth/monitoring.read';
 const OUTBOUND_FETCH_TIMEOUT_MS = 8_000;
 
-let cachedToken: { accessToken: string; expiresAtMs: number } | null = null;
-
-function base64UrlEncode(input: string | Buffer): string {
-  return Buffer.from(input).toString('base64url');
-}
-
-function createServiceAccountJwt(clientEmail: string, privateKey: string): string {
-  const nowSec = Math.floor(Date.now() / 1000);
-  const header = base64UrlEncode(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
-  const claimSet = base64UrlEncode(
-    JSON.stringify({
-      iss: clientEmail,
-      scope: MONITORING_READ_SCOPE,
-      aud: GOOGLE_TOKEN_URI,
-      iat: nowSec,
-      exp: nowSec + 3600,
-    }),
-  );
-
-  const unsigned = `${header}.${claimSet}`;
-  const signer = createSign('RSA-SHA256');
-  signer.update(unsigned);
-  signer.end();
-  const signature = signer.sign(privateKey, 'base64url');
-  return `${unsigned}.${signature}`;
-}
-
 async function getMonitoringAccessToken(): Promise<{ accessToken: string; projectId: string }> {
-  const creds = getServiceAccountCredentials();
-  const nowMs = Date.now();
-  if (cachedToken && cachedToken.expiresAtMs - 60_000 > nowMs) {
-    return { accessToken: cachedToken.accessToken, projectId: creds.projectId };
-  }
-
-  const assertion = createServiceAccountJwt(creds.clientEmail, creds.privateKey);
-  const body = new URLSearchParams({
-    grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-    assertion,
-  });
-
-  const resp = await fetch(GOOGLE_TOKEN_URI, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-    signal: AbortSignal.timeout(OUTBOUND_FETCH_TIMEOUT_MS),
-  });
-
-  const json = (await resp.json().catch(() => ({}))) as {
-    access_token?: string;
-    expires_in?: number;
-    error?: string;
-    error_description?: string;
-  };
-
-  if (!resp.ok || !json.access_token) {
-    throw new Error(
-      json.error_description ||
-        json.error ||
-        `Failed to obtain Google Cloud Monitoring token (HTTP ${resp.status}).`,
-    );
-  }
-
-  const ttlSec = typeof json.expires_in === 'number' ? json.expires_in : 3600;
-  cachedToken = {
-    accessToken: json.access_token,
-    expiresAtMs: nowMs + ttlSec * 1000,
-  };
-
-  return { accessToken: json.access_token, projectId: creds.projectId };
+  return getGoogleAccessToken(MONITORING_READ_SCOPE);
 }
 
 interface MonitoringListResponse {

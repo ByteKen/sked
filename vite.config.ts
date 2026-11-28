@@ -26,9 +26,20 @@ function localStatusApiPlugin(): Plugin {
         async (req: IncomingMessage, res: ServerResponse, next: () => void) => {
           const rawUrl = req.url ?? '';
           const parsedUrl = new URL(rawUrl, 'http://localhost');
-          if (parsedUrl.pathname !== '/api/status') {
+          const apiModuleMap: Record<string, string> = {
+            '/api/status': '/api/status.ts',
+            '/api/agenda/manage': '/api/agenda/manage.ts',
+          };
+          const modulePath = apiModuleMap[parsedUrl.pathname];
+          if (!modulePath) {
             next();
             return;
+          }
+
+          // Pick up live .env edits during local development without requiring a Vite restart
+          const freshEnv = loadEnv(server.config.mode, process.cwd(), '');
+          for (const [key, value] of Object.entries(freshEnv)) {
+            process.env[key] = value;
           }
 
           const sendJson = (statusCode: number, body: unknown) => {
@@ -39,11 +50,11 @@ function localStatusApiPlugin(): Plugin {
           };
 
           try {
-            const mod = (await server.ssrLoadModule('/api/status.ts')) as {
+            const mod = (await server.ssrLoadModule(modulePath)) as {
               default?: (vReq: unknown, vRes: unknown) => Promise<unknown>;
             };
             if (typeof mod.default !== 'function') {
-              sendJson(500, { error: 'Invalid /api/status handler export.' });
+              sendJson(500, { error: `Invalid ${parsedUrl.pathname} handler export.` });
               return;
             }
 
@@ -52,7 +63,23 @@ function localStatusApiPlugin(): Plugin {
               query[key] = val;
             });
 
-            const vercelReq = Object.assign(req, { query });
+            let body: unknown = undefined;
+            if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+              const chunks: Buffer[] = [];
+              for await (const chunk of req) {
+                chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+              }
+              const rawBody = Buffer.concat(chunks).toString('utf8').trim();
+              if (rawBody) {
+                try {
+                  body = JSON.parse(rawBody);
+                } catch {
+                  body = rawBody;
+                }
+              }
+            }
+
+            const vercelReq = Object.assign(req, { query, body });
             const vercelRes = {
               setHeader: (name: string, value: string | string[]) => {
                 res.setHeader(name, value);
@@ -62,8 +89,8 @@ function localStatusApiPlugin(): Plugin {
                 res.statusCode = code;
                 return vercelRes;
               },
-              json: (body: unknown) => {
-                sendJson(res.statusCode || 200, body);
+              json: (jsonBody: unknown) => {
+                sendJson(res.statusCode || 200, jsonBody);
                 return vercelRes;
               },
             };
@@ -71,7 +98,7 @@ function localStatusApiPlugin(): Plugin {
             await mod.default(vercelReq, vercelRes);
           } catch (err) {
             sendJson(500, {
-              error: err instanceof Error ? err.message : 'Local /api/status middleware error.',
+              error: err instanceof Error ? err.message : `Local ${parsedUrl.pathname} error.`,
             });
           }
         },

@@ -69,7 +69,8 @@ export type ParsedBotCallback =
     filter: TaskFilterMode;
     page: number;
   }
-  | { type: 'quick_done'; workspaceId: string; taskId: number; source: 'alert' | 'today' | 'upcoming' };
+  | { type: 'quick_done'; workspaceId: string; taskId: number; source: 'alert' | 'today' | 'upcoming' }
+  | { type: 'agenda_done'; itemId: string };
 
 export const BOT_COMMANDS: Array<{ command: string; description: string }> = [
   { command: 'tasks', description: 'Browse tasks and mark items done' },
@@ -170,6 +171,11 @@ export function parseBotCallback(data: string | undefined): ParsedBotCallback {
       const source =
         sourceRaw === 't' ? 'today' : sourceRaw === 'u' ? 'upcoming' : 'alert';
       return { type: 'quick_done', workspaceId, taskId, source };
+    }
+    case 'agd': {
+      const itemId = parts[1]?.trim();
+      if (!itemId) return { type: 'noop' };
+      return { type: 'agenda_done', itemId };
     }
     default:
       return { type: 'noop' };
