@@ -260,6 +260,37 @@ describe('scheduling domain engine (reschedule, cascade, CPM, baselines)', () =>
     expect(cpm.slackByTaskId.get(8)).toBe(11);
   });
 
+  it('only marks subtasks critical when their parent is critical and they drive the parent finish', () => {
+    const cpm = computeCriticalPath(chainTasks);
+
+    // Phase A (critical): Review Spec ends on Phase A's end date -> critical; Draft Spec has 2 days of slack
+    expect(cpm.criticalTaskIds.has(3)).toBe(true);
+    expect(cpm.criticalTaskIds.has(2)).toBe(false);
+    expect(cpm.slackByTaskId.get(2)).toBe(2);
+
+    // Phase B (critical): UI Polish drives Phase B's end -> critical; API Setup has slack
+    expect(cpm.criticalTaskIds.has(6)).toBe(true);
+    expect(cpm.criticalTaskIds.has(5)).toBe(false);
+
+    // Subtasks of a non-critical parent are never critical, even if they end on the parent's end date
+    const withSideProject: Task[] = [
+      ...chainTasks,
+      {
+        id: 9,
+        name: 'Side Project',
+        start: '2026-11-01',
+        end: '2026-11-04',
+        progress: 0,
+        children: [
+          { id: 10, name: 'Side Sub', start: '2026-11-03', end: '2026-11-04', progress: 0, parentId: 9 },
+        ],
+      },
+    ];
+    const sideCpm = computeCriticalPath(withSideProject);
+    expect(sideCpm.criticalTaskIds.has(9)).toBe(false);
+    expect(sideCpm.criticalTaskIds.has(10)).toBe(false);
+  });
+
   it('handles cyclic dependencies safely without infinite recursion', () => {
     const cyclic: Task[] = [
       { id: 1, name: 'A', start: '2026-11-01', end: '2026-11-05', progress: 0, dependencies: [2] },

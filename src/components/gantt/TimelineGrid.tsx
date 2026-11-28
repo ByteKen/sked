@@ -9,7 +9,6 @@ export interface TimelineGridProps {
   visibleTasks: readonly FlatTask[];
   rowHeight: number;
   selectedRowIndex: number;
-  todayOffsetPx: number | null;
   highlightWeekends?: boolean;
   onSelectTask: (taskId: number) => void;
   onHoverRowIndex: (rowIndex: number | null) => void;
@@ -27,7 +26,6 @@ export const TimelineGrid = memo(function TimelineGrid({
   visibleTasks,
   rowHeight,
   selectedRowIndex,
-  todayOffsetPx,
   highlightWeekends = true,
   onSelectTask,
   onHoverRowIndex,
@@ -142,15 +140,6 @@ export const TimelineGrid = memo(function TimelineGrid({
             transform: `translateY(${selectedRowIndex * rowHeight}px)`,
           }}
           className="pointer-events-none absolute left-0 right-0 top-0 bg-brand-500/[0.09] dark:bg-brand-400/[0.12]"
-        />
-      )}
-
-      {/* Vertical Today line (centered on todayOffsetPx, strictly below sticky z-30 header) */}
-      {todayOffsetPx !== null && (
-        <div
-          aria-hidden="true"
-          style={{ left: `${Math.max(0, todayOffsetPx - 1)}px` }}
-          className="pointer-events-none absolute top-0 bottom-0 z-[15] w-[2px] bg-brand-500/85 dark:bg-brand-400/85"
         />
       )}
     </div>

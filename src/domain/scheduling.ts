@@ -615,23 +615,45 @@ export function computeCriticalPath(tasks: readonly Task[]): CriticalPathResult 
     if (earlyFinish > projectFinish) projectFinish = earlyFinish;
   }
 
-  // Backward pass (late start / late finish)
+  // Backward pass (late start / late finish), memoized so every subtask's late finish is
+  // capped by its parent's late finish. A subtask can therefore only be critical when the
+  // parent task itself is critical AND the subtask drives the parent's finish.
   const ls = new Map<number, number>();
   const lf = new Map<number, number>();
 
-  for (let i = topo.length - 1; i >= 0; i--) {
-    const u = topo[i]!;
-    const node = nodeById.get(u)!;
-    const outgoing = dagSuccs.get(u)!;
-    let lateFinish = projectFinish;
-    if (outgoing.length > 0) {
-      lateFinish = Math.min(
-        ...outgoing.map((v) => (ls.get(v) ?? projectFinish) - handoffGap(u, v)),
-      );
+  const parentIdOf = new Map<number, number>();
+  for (const t of flat) {
+    if (t.parentId != null && t.parentId !== t.id && nodeById.has(t.parentId)) {
+      parentIdOf.set(t.id, t.parentId);
     }
-    const lateStart = lateFinish - (node.duration - 1);
+  }
+
+  const resolving = new Set<number>();
+  const resolveLateFinish = (u: number): number => {
+    const cached = lf.get(u);
+    if (cached !== undefined) return cached;
+    if (resolving.has(u)) return projectFinish; // defensive guard against malformed parent loops
+    resolving.add(u);
+
+    const node = nodeById.get(u)!;
+    let lateFinish = projectFinish;
+    for (const v of dagSuccs.get(u)!) {
+      const successorLateStart = resolveLateFinish(v) - (nodeById.get(v)!.duration - 1);
+      lateFinish = Math.min(lateFinish, successorLateStart - handoffGap(u, v));
+    }
+    const parentId = parentIdOf.get(u);
+    if (parentId !== undefined) {
+      lateFinish = Math.min(lateFinish, resolveLateFinish(parentId));
+    }
+
+    resolving.delete(u);
     lf.set(u, lateFinish);
-    ls.set(u, lateStart);
+    ls.set(u, lateFinish - (node.duration - 1));
+    return lateFinish;
+  };
+
+  for (const u of topo) {
+    resolveLateFinish(u);
   }
 
   const slackByTaskId = new Map<number, number>();

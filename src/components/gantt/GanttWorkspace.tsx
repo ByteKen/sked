@@ -685,7 +685,6 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     visibleTasks={visibleTasks}
                     rowHeight={rowHeight}
                     selectedRowIndex={selectedRowIndex}
-                    todayOffsetPx={showTodayLine ? todayOffsetPx : null}
                     highlightWeekends={highlightWeekends}
                     onSelectTask={handleSelectTask}
                     onHoverRowIndex={handleHoverRowIndex}
@@ -742,6 +741,16 @@ export const GanttWorkspace = forwardRef<GanttWorkspaceHandle, GanttWorkspacePro
                     onBarHover={handleBarHover}
                     onBarLeave={handleBarLeave}
                   />
+
+                  {/* Today line rendered ABOVE the bars (z-20) yet below the sticky z-30 header */}
+                  {showTodayLine && todayOffsetPx !== null && (
+                    <div
+                      aria-hidden="true"
+                      data-testid="today-line"
+                      style={{ left: `${Math.max(0, todayOffsetPx - 1)}px` }}
+                      className="pointer-events-none absolute top-0 bottom-0 z-20 w-[2px] bg-brand-500/85 dark:bg-brand-400/85"
+                    />
+                  )}
                 </div>
               </div>
             </div>
